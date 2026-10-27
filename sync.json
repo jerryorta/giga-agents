@@ -1,0 +1,23 @@
+{
+  "source": "~/Dev/DEV_ARCH/arch",
+  "plugins": {
+    "giga-ux": {
+      "skills": [
+        "ux-design"
+      ],
+      "agents": [
+        "ux-architect",
+        "ux-reviewer",
+        "ux-blind-user"
+      ]
+    }
+  },
+  "forbidden": [
+    "/Users/",
+    "@gigasoftware\\.io",
+    "claude\\.ai/(code/)?artifact/",
+    "atlassian\\.net",
+    "[a-z]+_secrets\\b",
+    "github_pat_|ghp_[A-Za-z0-9]|ATATT"
+  ]
+}

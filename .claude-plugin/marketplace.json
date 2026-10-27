@@ -1,0 +1,17 @@
+{
+  "name": "giga-agents",
+  "owner": {
+    "name": "Jerry Orta",
+    "url": "https://github.com/jerryorta"
+  },
+  "metadata": {
+    "description": "Claude Code plugins for product and UX workflows, published from a production Nx monorepo."
+  },
+  "plugins": [
+    {
+      "name": "giga-ux",
+      "source": "./plugins/giga-ux",
+      "description": "UX architecture and review: wireframe a feature before its visual design, review it in the running app after it is built, with blind first-click and expectation tests."
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "giga-ux",
+  "description": "UX architecture and review: wireframe a feature before its visual design, review it in the running app after it is built, with blind first-click and expectation tests.",
+  "author": {
+    "name": "Jerry Orta",
+    "url": "https://github.com/jerryorta"
+  },
+  "repository": "https://github.com/jerryorta/giga-agents",
+  "keywords": ["ux", "information-architecture", "usability", "review", "wireframe"]
+}
