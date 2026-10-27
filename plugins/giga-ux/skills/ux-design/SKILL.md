@@ -11,7 +11,7 @@ You are a sceptic, not an adversary. Every name and path is questioned; the evid
 
 **Core principle: exists ≠ findable.** A route, a nav item or a tab proves nothing. A task passes only when someone who has never seen the code, reasoning from what is visible, would pick each next step without hesitation.
 
-Scales, heuristics and sources: `reference.md`, beside this file.
+Scales, heuristics and sources: `${CLAUDE_SKILL_DIR}/reference.md`. Read it before you score scent or severity or judge any words: the scent scale, the § Words rules and the voice-guide rules live there, not here.
 
 ## Project config
 
@@ -83,7 +83,7 @@ Produce a **UX brief** — one section per heading, in this order. Start from wh
 Every section name, nav label and metaphor on the path gets interrogated — the ones the team has stopped hearing most of all.
 
 - **What does the word promise?** Take its real-world meaning and ask what a person would expect behind it. A *hall* holds people and events; would anyone look in one for their own notes? A metaphor earns its place only when its real-world meaning predicts what is inside.
-- **Expectation test.** One `giga-ux:ux-blind-user` run **per label**, given the app's one-line purpose and that label alone: what would you expect to find there, and what would surprise you? Compare with what the section actually holds. A mismatch is a finding with its own evidence; a match is a Keep.
+- **Expectation test.** One `giga-ux:ux-blind-user` run **per label**, given the app's one-line purpose and that label alone — never two labels in one run, because each answer would colour the next: what would you expect to find there, and what would surprise you? Compare with what the section actually holds. A mismatch is a finding with its own evidence; a match is a Keep.
 - **Is the metaphor held?** If there are Halls, what are the rooms, and does the app keep the metaphor up or drop it one level down? A half-kept metaphor costs the user twice: once to learn it, again when it stops working.
 - **Brand vs. signpost.** A brand word can name the product; navigation needs signposts. A branded label stays only with a plain-language companion (a subtitle, or the plain word beside it) or a passing expectation test — otherwise propose the plain label.
 - **Collisions.** The same concept under two names; one name for two concepts; two verbs for one act (Practice / Review / Take).
@@ -145,7 +145,7 @@ Against the rendered app: run it with the `devServerSkill` from § Project confi
 6. **Findings** (or `none`), ranked by severity: severity · `story` or `existing` · heuristic · step · evidence · fix or recommendation. List `Remove` verdicts separately as **Recommended removals** (or `none`), each with its evidence.
 7. **Keep** — what works and must survive later changes, each with its evidence (a blind pick that matched, scent 3 / 0, a state that already does its three jobs).
 8. **New scope** — `none` unless a step outside this story's work failed; otherwise the `add` ideas for the Idea Board, ranked by severity, each with the user's job, the step it would answer, its evidence, and "covered by <key or id>" when a ticket or entry already names it. The dispatching session writes to the board only the unmatched ones that meet the ideas policy's § Entry threshold.
-9. **Evidence basis** — which steps were seen rendered and which came from source only, the themes and widths checked, any screen `owed`, and what only testing with real users (a tree test, a first-click test with participants) can confirm.
+9. **Evidence basis** — which steps were seen rendered and which came from source only, the themes and widths checked, any screen `owed`, and what only testing with real users (a tree test, a first-click test with participants) can confirm. Then the **blind-run ledger**: one line per run — first-click with its screen, or expectation with its one label — and the count against the screens and labels on the path. A screen or label without its own run is named as a gap; a run that covered two is not evidence for either.
 
 **If the app cannot be run:** the Outcome is `Owed`, never `Ship`. Work from source, label every step `source-only`, and run the blind tests on the labels in the templates, saying so. Build each screen's label list the way a user would meet it: the visible text, or the `aria-label` only where no text shows; an icon-only control as its icon (`[+ icon]`), because that is all a user sees; a conditional label with its condition. A check source cannot settle — visible without hunting, above the fold — is scored `unverified`, never assumed. A source-only step earns at best `Pass with friction` — source cannot show visibility, the fold or breakpoints — but `Fail` stands wherever source proves the path does not exist.
 
