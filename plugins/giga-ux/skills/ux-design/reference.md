@@ -110,7 +110,7 @@ Every word a user reads or hears is interface. The list below covers common kind
 - **Rendered, not drafted:** check truncation and wrapping at phone width, text over images, and every state, in the running app.
 
 **Voice versus tone.** A brand's voice stays fixed; its tone shifts with the moment (an error is calmer than a welcome). The voice guide places the brand on the four tone dimensions (funny ↔ serious, formal ↔ casual, respectful ↔ irreverent, enthusiastic ↔ matter-of-fact) and gives do / don't pairs. A brand word fails as a signpost (see Labels above) even when it fits the voice.
-**Which voice guide.** The repo lists its guides in `.claude/giga/project.json` under `ux.brandVoice.guides`: each brand with the apps it covers, its guide file, its `status` and any `note`. Pick the guide by the app being worked on, not by the brand's name alone.
+**Which voice guide.** The repo lists its guides in `.claude/giga/config.json` under `ux.brandVoice.guides`: each brand with the apps it covers, its guide file, its `status` and any `note`. Pick the guide by the app being worked on, not by the brand's name alone.
 
 - **Owner decisions** in a guide govern new copy. An existing string that breaks one is an `existing` finding with the decided wording as the recommendation; the copy pass to bring screens in line is the owner's to schedule.
 - **A draft guide applies**, and each of its open Decisions for the owner is treated as undecided: flag copy that conflicts with the draft's choice without rewriting it.

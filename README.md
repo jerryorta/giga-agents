@@ -28,7 +28,7 @@ Components are namespaced by the plugin: the skill is `/giga-ux:ux-design` and t
 
 ## Per-repo config
 
-The plugins carry the method; each repo keeps its own data in `.claude/giga/project.json`. Every field is optional, and each skill states what it does without one.
+The plugins carry the method; each repo keeps its own data in `.claude/giga/config.json`. Every field is optional, and each skill states what it does without one.
 
 ```json
 {

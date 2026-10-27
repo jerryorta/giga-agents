@@ -15,7 +15,7 @@ Scales, heuristics and sources: `reference.md`, beside this file.
 
 ## Project config
 
-What differs from repo to repo comes from `.claude/giga/project.json` at the repository root, under `ux`. Read it once at the start. A missing file or field takes the fallback below, never a guess.
+What differs from repo to repo comes from `.claude/giga/config.json` at the repository root, under `ux`. Read it once at the start. A missing file or field takes the fallback below, never a guess.
 
 | Field | Used for | When absent |
 | --- | --- | --- |
