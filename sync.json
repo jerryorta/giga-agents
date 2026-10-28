@@ -30,6 +30,13 @@
         "clean-exit"
       ],
       "agents": []
+    },
+    "giga-angular": {
+      "skills": [
+        "ngrx-component-state",
+        "create-storybook"
+      ],
+      "agents": []
     }
   },
   "forbidden": [

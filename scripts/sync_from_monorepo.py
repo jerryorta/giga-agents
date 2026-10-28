@@ -2,12 +2,13 @@
 """Publish skills and agents from the source monorepo into this marketplace's plugins.
 
 The monorepo's `.claude/` is the source of truth; this script copies the skills and agents
-named in `sync.json` verbatim, then makes two mechanical changes:
+named in `sync.json` verbatim, then applies three rules:
 
 - Plugin components are namespaced (`giga-ux:ux-architect`), so every mention of a skill or agent
   any plugin here ships — backticked (`ux-design`), invoked (`/epic-next`), or preloaded in an
   agent's `skills:` frontmatter — gets that plugin's prefix, across plugins.
 - Nothing is written if any copied file matches a `forbidden` pattern: this repo is public.
+- Nothing is written if a skill reads a `${CLAUDE_SKILL_DIR}/../<skill>/` file its plugin lacks.
 
 Usage: scripts/sync_from_monorepo.py [--source PATH] [--dry-run]
 """
@@ -21,6 +22,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SKILL_REF = re.compile(r"\$\{CLAUDE_SKILL_DIR\}/\.\./([\w-]+)/([^\s`'\")\]]+)")
 
 
 def owners(plugins: dict) -> dict[str, str]:
@@ -73,6 +75,19 @@ def leaks(tree: Path, patterns: list[str]) -> list[str]:
     return found
 
 
+def broken_refs(plugin_dir: Path) -> list[str]:
+    """List each `${CLAUDE_SKILL_DIR}/../<skill>/<file>` that does not resolve inside the plugin."""
+    found = []
+    for path in sorted(p for p in plugin_dir.rglob("*") if p.is_file()):
+        for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+            for match in SKILL_REF.finditer(line):
+                skill, rel = match.group(1), match.group(2).rstrip(".,;:")
+                if not (plugin_dir / "skills" / skill / rel).exists():
+                    where = path.relative_to(plugin_dir.parent)
+                    found.append(f"{where}:{n}: {skill}/{rel} is not in {plugin_dir.name}")
+    return found
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", help="monorepo root (default: sync.json `source`)")
@@ -95,6 +110,12 @@ def main() -> int:
         if problems:
             print("Refusing to publish — private content in the copied files:", file=sys.stderr)
             print("\n".join(f"  {p}" for p in problems), file=sys.stderr)
+            return 1
+
+        broken = [ref for plugin in config["plugins"] for ref in broken_refs(staged / plugin)]
+        if broken:
+            print("Refusing to publish — a skill reads a file outside its plugin:", file=sys.stderr)
+            print("\n".join(f"  {b}" for b in broken), file=sys.stderr)
             return 1
 
         for plugin in config["plugins"]:

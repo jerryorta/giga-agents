@@ -17,6 +17,11 @@
       "name": "giga-workflow",
       "source": "./plugins/giga-workflow",
       "description": "Jira epic workflow: plan an epic into waves, take one story at a time from ticket to merged PR, or run a whole board unattended — with plan files, a refactor-when-touched gate, UX review and cross-actor testing."
+    },
+    {
+      "name": "giga-angular",
+      "source": "./plugins/giga-angular",
+      "description": "Angular skills: scaffold a component's Storybook stories against your own review container and story examples, and place a component's reactive state in a colocated NgRx SignalStore that follows your repo's reference stores."
     }
   ]
 }

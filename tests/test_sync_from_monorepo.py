@@ -183,6 +183,34 @@ class LeaksTest(unittest.TestCase):
             self.assertEqual(sync.leaks(Path(tmp), FORBIDDEN), [])
 
 
+class RefsTest(unittest.TestCase):
+    REF = "Read ${CLAUDE_SKILL_DIR}/../y/ref.md first.\n"
+
+    def test_flags_a_reference_into_another_plugin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), f"Intro.\n{self.REF}")
+            write(Path(tmp, "plugins/b/skills/y/ref.md"), "Ref.\n")
+            self.assertEqual(sync.broken_refs(Path(tmp, "plugins/a")),
+                             ["a/skills/x/SKILL.md:2: y/ref.md is not in a"])
+
+    def test_passes_a_reference_inside_its_own_plugin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), self.REF)
+            write(Path(tmp, "plugins/a/skills/y/ref.md"), "Ref.\n")
+            self.assertEqual(sync.broken_refs(Path(tmp, "plugins/a")), [])
+
+    def test_strips_sentence_punctuation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "Then read ${CLAUDE_SKILL_DIR}/../y/ref.md.\n")
+            write(Path(tmp, "plugins/a/skills/y/ref.md"), "Ref.\n")
+            self.assertEqual(sync.broken_refs(Path(tmp, "plugins/a")), [])
+
+    def test_the_published_tree_resolves(self):
+        for plugin in sorted(p for p in (REPO / "plugins").iterdir() if p.is_dir()):
+            with self.subTest(plugin=plugin.name):
+                self.assertEqual(sync.broken_refs(plugin), [])
+
+
 class MainTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -249,6 +277,19 @@ class MainTest(unittest.TestCase):
                 self.assertEqual(out, "")
                 self.assertIn("Refusing to publish", err)
                 self.assertIn("giga-workflow/skills/jira/SKILL.md:2: matches '/Users/'", err)
+                self.assertEqual(self.plugins(), before)
+
+    def test_a_cross_plugin_reference_fails_and_writes_nothing(self):
+        write(self.src / ".claude/skills/jira/SKILL.md", "Intro.\nRead ${CLAUDE_SKILL_DIR}/../ux-design/x.md.\n")
+        write(self.src / ".claude/skills/ux-design/x.md", "Shipped in giga-ux.\n")
+        before = self.plugins()
+        for args in (("--dry-run",), ()):
+            with self.subTest(args=args):
+                code, out, err = self.run_main(*args)
+                self.assertEqual(code, 1)
+                self.assertEqual(out, "")
+                self.assertIn("Refusing to publish", err)
+                self.assertIn("giga-workflow/skills/jira/SKILL.md:2: ux-design/x.md is not in giga-workflow", err)
                 self.assertEqual(self.plugins(), before)
 
 

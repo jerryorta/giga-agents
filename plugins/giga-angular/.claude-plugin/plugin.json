@@ -1,0 +1,10 @@
+{
+  "name": "giga-angular",
+  "description": "Angular skills: scaffold a component's Storybook stories against your own review container and story examples, and place a component's reactive state in a colocated NgRx SignalStore that follows your repo's reference stores.",
+  "author": {
+    "name": "Jerry Orta",
+    "url": "https://github.com/jerryorta"
+  },
+  "repository": "https://github.com/jerryorta/giga-agents",
+  "keywords": ["angular", "storybook", "ngrx", "signal-store", "nx"]
+}
