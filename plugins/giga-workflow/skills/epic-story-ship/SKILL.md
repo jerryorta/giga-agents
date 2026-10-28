@@ -64,6 +64,8 @@ Refuse and stop when:
 
 **Direct boards** (`config.mergeMode === "direct"`) have no PR either, and `/giga-workflow:epic-merge-pr` refuses them too. There this skill also **is** `/giga-workflow:epic-story-complete`, run unchanged: its own merge fast-forwards `<git.mainBranch>` to the story and pushes it, so the story still reaches `<git.mainBranch>` and Done, and it chains `/giga-workflow:post-merge-cleanup` itself. Add one line to the report saying the merge leg did not apply. Do not invoke `/giga-workflow:epic-merge-pr`.
 
+**Skill-only stories** (`/giga-workflow:epic-story-complete` Step 1 finds this repo clean and the skills leg pending) have no PR on any board. From there this skill **is** `/giga-workflow:epic-story-complete`, its own gate and report included, fed by the audit (amendment A0): it lands the story on the skills repo's live branch and takes it to Done, so the run stops after it, already Done with no PR to merge, as on a direct board. Add one line to the report saying the merge leg did not apply. Do not invoke `/giga-workflow:epic-merge-pr`.
+
 ---
 
 ## Composition

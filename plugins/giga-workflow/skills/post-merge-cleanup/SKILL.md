@@ -5,7 +5,7 @@ description: "Clean up after a PR merge or a direct-mode merge: delete the merge
 
 Clean up after a PR merge or a direct-mode merge: delete the merged branch (local, and remote when it was pushed) and transition the Jira ticket to Done: $ARGUMENTS
 
-> **Three modes:** (1) **PR-mode boards** — run per story on the merged `<git.branchPrefix><key>-<slug>` branch (deletes it + transitions the story → Done). (2) **Epic-branch-mode boards** (`mergeMode:"epic-branch"`) — stories were already taken to Done by `/giga-workflow:epic-story-complete`, so here you run this **once per epic** on the merged epic branch (e.g. `/giga-workflow:post-merge-cleanup <git.branchPrefix>abc-123-short-slug`) to delete the epic branch + transition the **epic** ticket → Done. (3) **Direct-mode boards** (`mergeMode:"direct"`) — run per story, chained by `/giga-workflow:epic-story-complete` right after it fast-forwards `<git.mainBranch>` to the story branch and pushes it. The story branch was never pushed and the ticket is usually already Done, so this deletes the local branch, reconciles the wave plan and closes the epic when it was the last story. The branch-name key parse picks up whichever key the branch encodes (story or epic).
+> **Three modes:** (1) **PR-mode boards** — run per story on the merged `<git.branchPrefix><key>-<slug>` branch (deletes it + transitions the story → Done). (2) **Epic-branch-mode boards** (`mergeMode:"epic-branch"`) — stories were already taken to Done by `/giga-workflow:epic-story-complete`, so here you run this **once per epic** on the merged epic branch (e.g. `/giga-workflow:post-merge-cleanup <git.branchPrefix>abc-123-short-slug`) to delete the epic branch + transition the **epic** ticket → Done. (3) **Direct-mode boards** (`mergeMode:"direct"`) — run per story, chained by `/giga-workflow:epic-story-complete` right after it fast-forwards `<git.mainBranch>` to the story branch and pushes it. The story branch was never pushed and the ticket is usually already Done, so this deletes the local branch, reconciles the wave plan and closes the epic when it was the last story. A **skill-only story** (its whole change in the skills repo, `skillsRepo`) arrives the same way on a PR or direct board, chained once `<skillsRepo.branch>` is pushed: its local story branch is empty and its ticket already Done. The branch-name key parse picks up whichever key the branch encodes (story or epic).
 
 > ⚠️ **On a PR-mode board, prefer `/giga-workflow:epic-merge-pr <N>` over calling this skill directly — including when you reviewed and merged the PR on github.com.** `/giga-workflow:epic-merge-pr` is idempotent: it reads an already-`MERGED` PR and skips straight to chaining this skill, so it is never the wrong call. What it adds on top is the part a manual merge silently skips — it verifies the PR genuinely reached `MERGED` before anything is deleted, and it repairs a local `<git.mainBranch>` left a commit stale when `gh pr merge --delete-branch` fails with only a warning. That stale `<git.mainBranch>` is what the next story's branch gets cut from, so the repair is not cosmetic. Run this skill standalone only on an **epic-branch-mode** epic branch, which `/giga-workflow:epic-merge-pr` refuses by design. This note applies to PR-mode boards only: a direct-mode board has no PR, and its stories reach this skill through `/giga-workflow:epic-story-complete`.
 
@@ -17,6 +17,9 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | --- | --- | --- |
 | `git.mainBranch` | the branch checked out and pulled before the branch is deleted | `main` |
 | `git.branchPrefix` | the story branch prefix the ticket key is parsed from | `feat/` |
+| `skillsRepo.path` | the skills repo checked for the story's unpushed commits and uncommitted worktree before Done (`<repo name>` below is its last path component) | skip that check |
+| `skillsRepo.branch` | the skills repo's live branch those commits must reach on `origin` | `main` |
+| `skillsRepo.push` | the command that pushes `skillsRepo.branch`, named when only the push is missing | `git push origin <skillsRepo.branch>` |
 | `jira.cloudId` | the Atlassian cloud id passed to every Jira call | look it up with `getAccessibleAtlassianResources` |
 | `jira.mcpPrefix` | the prefix of the Atlassian MCP tool names | stop the Jira legs and tell the user to mark the ticket Done manually |
 | `plans.repo` | the plans repo holding ticket and epic plan files (wave-plan reconcile, epic close) | skip the wave-plan and epic-close sections |
@@ -105,11 +108,26 @@ Save the branch name for later steps.
    git remote prune origin
    ```
 
+## Hold Done while the skills repo is unpushed
+
+Only when `skillsRepo.path` is set and the branch encodes a ticket key (parsed as in the next section's step 1). One call:
+
+```bash
+sp=<skillsRepo.path> sb=<skillsRepo.branch>
+git -C "$sp" fetch -q origin "$sb" 2>/dev/null
+git -C "$sp" rev-parse -q --verify "origin/$sb" >/dev/null && x="^origin/$sb" || x=
+git -C "$sp" log --oneline --source --branches -E --grep='<KEY>([^0-9]|$)' $x
+wt=$(git -C "$sp" worktree list --porcelain | awk -v r="branch refs/heads/<branch-name>" '/^worktree /{w=substr($0,10)} $0==r{print w}')
+[ -n "$wt" ] && git -C "$wt" status --short
+```
+
+The first log lists the `<KEY>` commits on local branches that `origin/<skillsRepo.branch>` lacks (all of them before its first push), each with the branch it was found on; the last line lists a story worktree's uncommitted edits. **Any output holds Done and everything that follows from it**: the Jira transition and sub-task sweep, the wave-plan move and the epic close. Report what is unpushed and tell the user to finish it with `/giga-workflow:epic-story-complete` on the story branch (`git checkout -b <branch-name>` recreates it: the skills leg needs only its name), or, when every one is already on `<skillsRepo.branch>` and only the push is missing, run `<skillsRepo.push>` in the checkout that holds that branch; then re-run `/giga-workflow:post-merge-cleanup <branch-name>`. The rest of the cleanup still runs.
+
 ## Transition Jira Ticket to Done
 
 1. **Extract the ticket key** from the branch name. Branch names follow the pattern `<git.branchPrefix><KEY>-description` or `fix/<KEY>-description` (e.g., `<git.branchPrefix>ABC-123-short-slug` → `ABC-123`). Parse the key as the segment between the first `/` and the second `-`-separated word that is not uppercase (i.e., match the pattern `[A-Z]+-\d+`). Keys may be lowercase in the branch (`abc-123`) — uppercase them for the Jira API. For an epic-branch-mode **epic branch** (e.g. `<git.branchPrefix>abc-123-short-slug`) the same parse yields the **epic** key (`ABC-123`), so this transitions the **epic** → Done.
 
-2. **If a ticket key is found**, load the required Atlassian MCP tools using the ToolSearch tool:
+2. **If a ticket key is found** and Done is not held (previous section), load the required Atlassian MCP tools using the ToolSearch tool:
    - `select:<jira.mcpPrefix>getAccessibleAtlassianResources`
    - `select:<jira.mcpPrefix>getJiraIssue`
    - `select:<jira.mcpPrefix>getTransitionsForJiraIssue`
@@ -152,7 +170,7 @@ The wave plan lists what is **left**. A merged story that stays in it is drift, 
 
 This step is also the only writer of the story's line in the epic's `## Shipped` on PR and direct boards. `/giga-workflow:epic-story-complete` writes that line only on an epic-branch board, which has no per-story cleanup.
 
-Skip silently if no ticket key was found.
+Skip silently if no ticket key was found, or when Done is held.
 
 1. **Find the epic.** `grep -m1 '^epic:' <plans.repo>/<board>/<KEY>.md` (board = the lowercased key prefix, e.g. `ABC-78` → `abc`) gives `epic: <EPIC-KEY>` without reading the story. No such file, or no `epic:` line → skip.
 2. **Locate the two sections** in one call, without reading the epic whole:
@@ -166,7 +184,7 @@ Skip silently if no ticket key was found.
    `Read` only those ranges (`offset`/`limit`): the whole wave range, and just the last ~5 lines of `## Shipped`,
    which is enough to anchor the append. Then edit `<plans.repo>/<board>/<EPIC-KEY>.md`:
    - **Remove** the story's one-line entry from its `### Wave N` section. If that leaves the wave empty, remove the wave heading too.
-   - **Append** the story's one line to the `## Shipped` section (create it if absent), saying what the story *did* rather than what was wrong: `- <KEY> — <what shipped, past tense, ≤10 words> *(Wave <N>; PR #<N>)*`. Get the PR number from `gh pr list --state merged --head <branch-name> --json number --jq '.[0].number'` if it is not already known. With no PR (a direct-mode board), stamp the story's last commit on `<git.mainBranch>` instead, `git log -1 --format=%h -E --grep='<KEY>([^0-9]|$)' origin/<git.mainBranch>`: `*(Wave <N>; <short-sha>)*`. With no wave plan, word it from the story's summary and drop `Wave <N>; `. A `## Shipped` kept as a table gets the same content as a row in its existing columns.
+   - **Append** the story's one line to the `## Shipped` section (create it if absent), saying what the story *did* rather than what was wrong: `- <KEY> — <what shipped, past tense, ≤10 words> *(Wave <N>; PR #<N>)*`. Get the PR number from `gh pr list --state merged --head <branch-name> --json number --jq '.[0].number'` if it is not already known. With no PR (a direct-mode board), stamp the story's last commit on `<git.mainBranch>` instead, `git log -1 --format=%h -E --grep='<KEY>([^0-9]|$)' origin/<git.mainBranch>`: `*(Wave <N>; <short-sha>)*`. With neither (a skill-only story), stamp its skills commit, `git -C <skillsRepo.path> log -1 --format=%h -E --grep='<KEY>([^0-9]|$)' origin/<skillsRepo.branch>`: `*(Wave <N>; <repo name> <short-sha>)*`. With no wave plan, word it from the story's summary and drop `Wave <N>; `. A `## Shipped` kept as a table gets the same content as a row in its existing columns.
    - **Once only.** Before appending, check the `## Shipped` range for the key: `sed -n '<start>,<end>p' <path> | grep -cE '^(- |\| ?)<KEY>([^0-9]|$)'`. A non-zero count means the line is already there (a re-run, or a line written before this step owned it), so append nothing.
 3. **Commit the plans repo:**
    ```bash
@@ -182,7 +200,7 @@ Skip silently if no ticket key was found.
 An epic whose children are all Done is finished, and nothing else closes it. Run this after the story's own Done
 transition, so the live status already counts it.
 
-Skip steps 1–3 silently if no ticket key was found or the plan file named no `epic:`. If the key is itself an
+Skip this section when Done is held, and steps 1–3 silently if no ticket key was found or the plan file named no `epic:`. If the key is itself an
 epic-branch-mode **epic**, the Jira leg above already took it to Done, so go straight to step 4.
 
 1. **Count the open children** (live status, one call):
@@ -233,7 +251,8 @@ Post-merge cleanup complete:
 - Current branch: <current-branch> (unchanged) or "switched to <git.mainBranch>"
 - Deleted local branch: <branch-name> (or "not found locally")
 - Deleted remote branch: <branch-name> (or "already removed")
-- Jira <KEY>: transitioned to Done (or "no ticket found" or "already Done")
+- Skills repo: nothing unpushed ✓ (or "HELD — <unpushed commits | uncommitted edits in <worktree>>; Done, wave plan and epic close skipped"); omit this line when `skillsRepo.path` is absent
+- Jira <KEY>: transitioned to Done (or "no ticket found" or "already Done" or "held")
 - Sub-tasks: <N> → Done (or "none")
 - Wave plan: <EPIC-KEY> — <KEY> moved from Wave <N> to Shipped (or "added to Shipped, no wave plan" / "skipped")
 - Epic: <EPIC-KEY> → Done, last story shipped (or "<N> children still open" / "already Done" / "skipped")

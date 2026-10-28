@@ -34,6 +34,8 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `git.branchPrefix` | the prefix of a story's feature branch | `feat/` |
 | `git.mergeMethod` | how a PR is merged (the `gh pr merge` flag, and the merge the story agent runs) | `squash` |
 | `git.hasCI` | whether a side-change PR waits for checks before merging | `false`: merge without waiting on checks |
+| `skillsRepo.path` | the skills repo where a skill-only story's commit is verified (Steps 2d, 2d.5) | no skill-only stories: a story with no PR is verified by the board's mode alone |
+| `skillsRepo.branch` | the skills repo's live branch that commit must reach on `origin` | `main` |
 | `loop.ledgerDir` | the directory holding `<board>.jsonl`, the run's durable state | `~/.claude/epic-loop` |
 | `browser.runProfileLabel` | the browser profile the user connects for the run's browser checks (Step 1.4) | say "the profile you use for this repo" |
 | `browser.renderingFiles` | the regex for files that render UI, used by the Step 2d.5 browser check | count every changed file, so a `not-applicable` browser result always stops the run |
@@ -110,7 +112,7 @@ Line shapes:
 {"ts":"2026-08-05T14:05:02Z","type":"waveOrder","keys":["ABC-123","ABC-124","ABC-125","ABC-126","ABC-127","ABC-128"]}
 ```
 
-On a `direct` board `pr` is `null`, and the summary table's PR column shows the story's short SHA instead.
+On a `direct` board, and for a skill-only story, `pr` is `null`, and the summary table's PR column shows the story's short SHA instead.
 
 ## Step 1 — Pre-flight, once per run
 
@@ -267,15 +269,19 @@ gh pr view <pr> --json state,mergedAt --jq '{state,mergedAt}'
 
 On a direct board there is no PR; the second command is
 `git fetch -q origin && git log origin/<git.mainBranch> --oneline -E --grep '<KEY>([^0-9]|$)'`.
+A report with `pr: null` on any board may be a skill-only story; check the skills repo too:
+`git -C <skillsRepo.path> fetch -q origin <skillsRepo.branch> && git -C <skillsRepo.path> log origin/<skillsRepo.branch> --oneline -E --grep '<KEY>([^0-9]|$)'`,
+and the ticket's status with `python3 <plans.script> board --jql 'key = <KEY>'`.
 
 | Ground truth | Reading |
 |---|---|
 | Clean tree, on `<git.mainBranch>`, PR `MERGED` | genuinely `SHIPPED`, whatever the report said |
 | Direct board: clean tree, on `<git.mainBranch>`, the story's commit on `origin/<git.mainBranch>`, no PR | genuinely `SHIPPED`, whatever the report said |
+| Skill-only story, any board: clean tree, on `<git.mainBranch>`, no PR, the story's `<KEY>` commit on the skills repo's `origin/<skillsRepo.branch>`, ticket Done | genuinely `SHIPPED`, whatever the report said |
 | Non-empty tree on a `<git.branchPrefix>` branch | implemented but never shipped — recoverable; treat as `FAILED` with that note, and let the retry run `/giga-workflow:epic-story-complete --yes` on the existing diff rather than redoing the work |
 | PR `OPEN` and tree clean | `PR_OPEN_UNMERGED` — the merge is what failed, not the story |
 | Report says `AWAITING_ACTOR_TEST`, non-empty tree on its `<git.branchPrefix>` branch, no PR | genuinely `AWAITING_ACTOR_TEST` |
-| Report says `SHIPPED` but no PR exists (on a direct board: the story's commit is not on `origin/<git.mainBranch>`) | `FAILED`; trust the filesystem over the prose |
+| Report says `SHIPPED` but no PR exists (on a direct board: the story's commit is not on `origin/<git.mainBranch>`), and it is not a shipped skill-only story (row above) | `FAILED`; trust the filesystem over the prose |
 
 ### 2d.5 — Decision-adherence check
 
@@ -304,6 +310,7 @@ gh pr view <pr> --json files --jq '[.files[].path | select(test("<browser.render
 
 On a direct board, count the story's commits on `<git.mainBranch>` instead:
 `git log origin/<git.mainBranch> -E --grep '<KEY>([^0-9]|$)' --name-only --format= | sort -u | grep -cE '<browser.renderingFiles>'`.
+For a skill-only story, run that count with `git -C <skillsRepo.path>` against `origin/<skillsRepo.branch>`.
 
 **Exempt: the conventional-commit type.** A `decisions[]` entry whose subject is the commit type
 (`feat` vs `fix` vs `chore`) never trips this check, at any confidence. It changes no shipped

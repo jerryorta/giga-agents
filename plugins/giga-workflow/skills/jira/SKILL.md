@@ -17,6 +17,9 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `jira.cloudId` | the Jira cloud id for every MCP call (Phase 1) | resolve it with `<jira.mcpPrefix>getAccessibleAtlassianResources` |
 | `jira.mcpPrefix` | the tracker MCP tool-name prefix | stop and say the repo has no `jira.mcpPrefix` in `.claude/giga/config.json` |
 | `git.mainBranch` | the base branch the story is not switched to | `main` |
+| `skillsRepo.path` | the skills repo's main checkout; a plan that edits files there gets a story worktree beside it (Phases 3, 5s, 6, 7) | no skills leg: every file the story edits is in this repo |
+| `skillsRepo.branch` | the skills repo's live branch the story worktree is cut from (5s) | `main` |
+| `skillsRepo.check` | the skills repo's own check command, run in the story worktree (Phase 6) | the skills repo's commit and push hooks are its only gate |
 | `docs.constraints` | the standards doc plan-time refactoring is measured against | skip that standards read |
 | `docs.agentsMd` | the `AGENTS.md` locations to consider (Phase 3), with `<app>` / `<domain>` to fill in | the nearest `AGENTS.md` above each file the ticket touches |
 | `docs.testingStrategy` | where the roster of projects declaring `typecheck` lives | skip the pointer |
@@ -516,6 +519,11 @@ Hand `giga-ux:ux-architect` the plan-file path, the Phase 2.5 comp summary, any 
    story(ies), backend first (`/giga-workflow:epic-plan` Step 7.5 is the rule). The user decides at the plan gate; if
    they keep one story, 5a runs the backend slice first.
 
+3c. **Skills-repo files** (only when `skillsRepo.path` is set). A file the story changes in the skills
+   repo — a skill, agent or hook — is listed under its own `Skills repo (<repo name>)` heading, by its
+   path in that repo, and assigned to a slice like any other file. Phase 5 edits it in a story
+   worktree (5s).
+
 4. **Write the plan** to the plan file as directed by plan mode.
 
 5. **Present the plan** to the user for approval via `ExitPlanMode`.
@@ -607,11 +615,30 @@ After the user approves the plan (i.e., after exiting plan mode):
 
 ## Phase 5: Start Coding
 
-> **Never commit.** Do not run `git add` or `git commit`. Leave all changes unstaged for the user to review and commit manually.
+> **Never commit.** Do not run `git add` or `git commit`, here or in the skills-repo worktree (5s). Leave all changes unstaged for the user to review and commit manually.
 
 Implement according to the approved plan using a **team of parallel agents**. Divide work into as many agents as makes sense for the scope, then run a mandatory review gate before proceeding to Phase 6.
 
 **Build the story as written.** Implementation proposes nothing. A defect noticed while building, outside this story, is one Idea Board entry (`ideas.board`) with `source: "build"` only when it meets the idea policy (`ideas.policy`) § Entry threshold and nothing matches it (§ Check for a match first; otherwise a plans-file note), never a slice, a branch or a ticket. Tell every 5a agent to report only a defect that breaks or visibly mars a task, never an idea, and to act on none of it.
+
+### 5s: Skills-repo worktree — only when the plan edits the skills repo
+
+Skills-repo files are edited in a story worktree, never in `<skillsRepo.path>` or in the checkout that
+holds `<skillsRepo.branch>`: that branch is live, and every repo that loads the skills runs it. ⚡ Create
+it once, before 5a, in one `Bash` call — it takes this repo's branch name, and a rerun reuses it:
+
+```bash
+wt=<skillsRepo.path>-<key-lower> b=$(git branch --show-current)
+[ -d "$wt" ] || git -C <skillsRepo.path> worktree add "$wt" -b "$b" <skillsRepo.branch> \
+  || git -C <skillsRepo.path> worktree add "$wt" "$b"
+git -C "$wt" status --short --branch
+```
+
+Each 5a agent that owns a skills-repo file gets the worktree path with its slice and edits there. Its 5r
+snapshot is kept apart, `git -C <worktree> diff -- <refactor files> > <scratchpad>/refactor-skills-<slice>.patch`;
+the orchestrator concatenates those into `<scratchpad>/refactor-skills.patch`, checks it with
+`git -C <worktree> apply --check --cached`, and lists those files under the skills repo's name in
+`## Refactor (in place)`, so the skills repo lands its own refactor commit ahead of the feature.
 
 ### 5r: Refactor inside each slice — no separate pass
 
@@ -672,6 +699,7 @@ Each agent receives:
 - Its specific slice of files to create/modify
 - All relevant context (existing patterns, imports, conventions from CLAUDE.md)
 - Its slice's refactor file list and the standard for each (5r)
+- For skills-repo files, the story worktree path (5s), the only place it edits them
 
 Each agent must:
 - Refactor its slice's listed files and save its refactor snapshot before any feature edit (5r)
@@ -817,6 +845,11 @@ Do **not** create a PR per ticket. Instead:
    Only when the combined run goes red do you re-run a single `<checks.single>` to
    isolate it — one call to get the answer, not fifteen to ask the question.
 
+   **Skills-repo worktree (5s).** Run `<skillsRepo.check>` inside it in the same call, joined with `;`
+   so a red gate still shows its result: `(cd <skillsRepo.path>-<key-lower> && <skillsRepo.check>)`. It
+   blocks like the gate. With `skillsRepo.check` absent, say that the skills repo's commit and push
+   hooks are its only gate.
+
 2. **Fix any failures before proceeding.** Build failures in particular block the PR when the epic ships — do not defer them. If a build failure is pre-existing (not introduced by this ticket), verify by stashing the diff and rebuilding on the base commit; report to the user and continue only if it reproduces clean.
 3. Report results to the user.
 4. The PR is created once for the entire epic branch when all tickets are complete.
@@ -882,6 +915,10 @@ Open: localhost:<port>
 - [ ] <AC item verbatim from ticket>
 - [ ] <AC item verbatim from ticket>
 
+## Skills repo (only when 5s ran)
+Changed in <skillsRepo.path>-<key-lower> (branch <branch-name>, off <skillsRepo.branch>): <files>
+Try it: <how the skills repo's build guide tries a change from a worktree — e.g. a fresh session loading its plugins from there>, in a separate session: ship from one that loads the live copy, because `/giga-workflow:epic-story-complete` removes this worktree
+
 ## Design Validation (Stitch)
 Board: <project name>
 - <screen name> — https://stitch.withgoogle.com/projects/<projectId>/screens/<screenId> — verify: <what to check against the implementation>
@@ -910,4 +947,4 @@ Print the test plan output in the conversation.
 - If the Jira comment fails, report the error but continue with coding — the update is non-blocking.
 - If the transition fails, report it but continue.
 - Never force push. Never discard uncommitted changes.
-- **Never commit.** Do not run `git add` or `git commit` at any point during this skill. Leave all changes staged/unstaged for the user to review.
+- **Never commit.** Do not run `git add` or `git commit` at any point during this skill, in this repo or the skills-repo worktree. Leave all changes staged/unstaged for the user to review.

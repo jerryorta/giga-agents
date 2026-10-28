@@ -241,7 +241,7 @@ The owner sets `/effort` from this line before starting the next story, so it is
 ```
 Merged PR #<N> — <title>
   Commit:   <sha> on <baseRefName>
-  Ticket:   <KEY> → Done            (or: cleanup skipped)
+  Ticket:   <KEY> → Done            (or: held — skills repo unpushed; or: cleanup skipped)
   Branch:   <headRefName> deleted   (local + remote)
   Wave:     <KEY> moved to Shipped in <EPIC-KEY>
   Next:     <NEXT-KEY> — <summary> (<config.groupLabel> <N>) → /giga-workflow:epic-next <board>

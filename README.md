@@ -162,17 +162,18 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 | `workflow.devServers` · `workflow.devServerPrelude` · `workflow.storybook` | how to start each app and Storybook, and on which port |
 | `workflow.planning` · `workflow.boardTemplate` | dependency signals and path globs `/epic-plan` and `/jira` use to split and order work; the starter board `/epic-plan` seeds a new board from |
 | `workflow.loop` · `workflow.browser` | what an unattended run must hand to a human, where it keeps its ledger, precedent sources, browser checks |
+| `workflow.skillsRepo` | optional: a second repo holding skills a story may change — its checkout, live branch, check and push commands; the epic workflow lands and pushes it with the story |
 | `workflow.secrets` · `workflow.notify` · `workflow.memoryDir` · `workflow.epicCloseSkill` | optional: secrets repos to sync after a merge, desktop notifications, a personal memory folder, a skill to run when an epic closes |
 | `standards` | which docs `giga-standards` injects for each kind of file, the Bash source-file pattern and the byte budget (see What `giga-standards` expects) |
 
 ## How this repo is built
 
-This repo is the only copy of the plugins. Edit them here, in a `beta` worktree, never in the main working tree: the main working tree is the one every repo on the machine may be running.
+This repo is the only copy of the plugins. Two branches carry them: `beta`, held by its own worktree, is the live copy every repo on this machine runs, and `main` is the published copy. Neither is edited in place: each change is made and tried in a worktree of its own, off `beta`, before it lands there.
 
-1. Create the worktree once: `git worktree add ../giga-agents-beta -b beta`. Work and commit there.
+1. Create the `beta` worktree once: `git worktree add ../giga-agents-beta -b beta`, and put a direnv `.envrc` above your repos that names its `plugins` dir: `path_add CLAUDE_CODE_PLUGIN_DIRS "$HOME/<path to the beta worktree>/plugins"`. For each change, add a worktree off `beta`: `git worktree add ../giga-agents-<name> -b <name> beta`. Work and commit there.
 2. Run `git config core.hooksPath .githooks` once per clone. Then `scripts/check.sh` gates every commit and push: `python3 -m unittest discover -s tests`, `scripts/check_plugins.py` and `claude plugin validate .`. `check_plugins.py` refuses private content (home paths, private emails, private links, token prefixes) in `plugins/` and this README, a skill that reads another plugin's file through `${CLAUDE_SKILL_DIR}`, and a bare skill or agent name. Names in skills are written namespaced (`/giga-workflow:epic-next`, `giga-ux:ux-reviewer`), and hook files are never rewritten.
-3. Try a change in one session with `CLAUDE_CODE_PLUGIN_DIRS=<worktree>/plugins claude`.
-4. Smoke-test each plugin as installed. Load it into a scratch repo whose config is empty and ask, read-only, what it sees. Run this from the worktree:
+3. Try the change in one session with `CLAUDE_CODE_PLUGIN_DIRS=<change worktree>/plugins claude`.
+4. Smoke-test each plugin as installed. Load it into a scratch repo whose config is empty and ask, read-only, what it sees. Run this from the change's worktree:
 
    ```bash
    root=$PWD scratch=$(mktemp -d)
@@ -201,5 +202,5 @@ This repo is the only copy of the plugins. Edit them here, in a `beta` worktree,
    ```
 
    A missing file, a name without its plugin prefix, a hook line other than `exit 0 · 0 bytes`, or a fallback that guesses instead of asking is a defect: fix it in the worktree and run again from step 2.
-5. Merge `beta` into `main`. That puts the change live on every repo of this machine that loads this clone: put a direnv `.envrc` above your repos with `path_add CLAUDE_CODE_PLUGIN_DIRS "$HOME/<path to this clone>/plugins"`, and each session picks the plugins up at its next start or `/reload-plugins`. A skill that reads a new config field ships after the repos have that field.
-6. `git push` publishes to the public repo. Repos on other machines then run `claude plugin marketplace update giga-agents`, then `claude plugin update <plugin>@giga-agents --scope project` for each plugin they install, and restart their sessions. Auto-update is off for this marketplace and every install stays pinned to the commit it was installed at: the marketplace update refreshes the catalog only, and the plugin update moves the install.
+5. Fast-forward `beta` to the change (`git merge --ff-only <name>` in the `beta` worktree), push `beta` to `origin/beta`, and remove the change's worktree and branch. That puts the change live on every repo of this machine: each session picks the plugins up at its next start or `/reload-plugins`. A skill that reads a new config field ships after the repos have that field. The epic workflow (`giga-workflow`) makes the change worktree, fast-forwards `beta` and pushes it itself for a repo whose `.claude/giga/config.json` names this clone in `workflow.skillsRepo`.
+6. Publish: fast-forward `main` to `beta` (`git merge --ff-only beta` in the main working tree) and `git push`. Repos on other machines then run `claude plugin marketplace update giga-agents`, then `claude plugin update <plugin>@giga-agents --scope project` for each plugin they install, and restart their sessions. Auto-update is off for this marketplace and every install stays pinned to the commit it was installed at: the marketplace update refreshes the catalog only, and the plugin update moves the install.

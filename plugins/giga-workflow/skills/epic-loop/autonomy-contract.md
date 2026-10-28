@@ -287,9 +287,11 @@ each result returns to your `Agent` call. Give each a tight brief and ask for a 
 - **Shipping.** Once the gate is green and every review has returned (§6.5), one sub-agent runs
   `/giga-workflow:epic-evolution-audit` (when enabled), `/giga-workflow:epic-story-complete --yes`, then `/giga-workflow:epic-merge-pr --yes`. On a
   direct board it stops after `/giga-workflow:epic-story-complete --yes`, which already fast-forwards and pushes
-  `<git.mainBranch>`. Its brief carries what the plan-file Outcome needs: the decisions, pins and
-  summary. It returns the PR number (the commit SHA on a direct board), merged state, Jira status and
-  evolution lines, which you fold into §8.
+  `<git.mainBranch>`. A skill-only story (the whole diff in the skills repo's story worktree) stops
+  there on any board: `/giga-workflow:epic-story-complete --yes` lands it on the skills repo's live branch,
+  pushes it and takes the ticket to Done, with no PR to merge. Its brief carries what the plan-file Outcome needs: the decisions, pins and
+  summary. It returns the PR number (the commit SHA on a direct board, the skills repo's SHA on a
+  skill-only story), merged state, Jira status and evolution lines, which you fold into §8.
 
 Nested reviewers (`giga-ux:ux-reviewer`, `giga-ux:ux-architect`, the 5b reviews) are unchanged.
 
@@ -412,7 +414,7 @@ FAILED whenever the model emphasises it; a fenced block is immune to that.)
 
 | Status | Meaning | State you leave behind |
 |---|---|---|
-| `SHIPPED` | Merged to `<git.mainBranch>`, ticket Done, branch deleted | Clean tree on `<git.mainBranch>` |
+| `SHIPPED` | Merged to `<git.mainBranch>`, ticket Done, branch deleted (skill-only story: landed on `<skillsRepo.branch>` and pushed) | Clean tree on `<git.mainBranch>` |
 | `PR_OPEN_UNMERGED` | PR opened and ticket In Review, but the merge did not land | Branch pushed, PR open |
 | `AWAITING_ACTOR_TEST` | Gate green and checks done, but the story needs cross-actor testing (§7.5) | Branch in place with the finished work, uncommitted |
 | `BLOCKED` | Ticket not implementable as written (§4) | No branch, or a branch with no commits |
@@ -422,7 +424,7 @@ FAILED whenever the model emphasises it; a fenced block is immune to that.)
 Populate `blocker` with the specific, actionable reason for every status except `SHIPPED` — it is
 what the orchestrator shows the user and what a retry is given to work with. Set every field you
 know; use `null` for what genuinely does not apply. On a direct board `pr` is always `null`: the story
-reaches `<git.mainBranch>` with no PR.
+reaches `<git.mainBranch>` with no PR. So is a skill-only story's, which lands on the skills repo's live branch.
 
 **`recommended` and `implemented` are what the orchestrator machine-checks.** Record every decision
 the ladder touched, and set `recommended` to what §6.1–6.3 actually returned — not to what you did.
@@ -456,6 +458,7 @@ browser verification          # §7 — only when the board sets loop.browserVer
 /giga-workflow:epic-story-complete --yes    # commit (cz format) + push + PR + ticket → In Review
                               # direct board: commit + fast-forward + push <git.mainBranch> + ticket Done
                               #   + chain /giga-workflow:post-merge-cleanup; the chain ends here
+                              # skill-only story, any board: land + push the skills branch + Done; ends here
 /giga-workflow:epic-merge-pr --yes          # merge (git.mergeMethod) + chain /giga-workflow:post-merge-cleanup → ticket Done
                               # audit + complete + merge run in one Sonnet ship sub-agent (§6.9)
 <fenced JSON report>          # §8 — last thing in your turn

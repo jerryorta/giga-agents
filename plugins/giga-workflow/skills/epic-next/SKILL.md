@@ -296,6 +296,8 @@ After /giga-workflow:jira finishes and the user has reviewed the diff, invoke `/
 - **PR mode:** push the branch with `-u origin`, open the PR via `gh pr create` with the test plan in the body, and transition the ticket to **In Review** (`/giga-workflow:epic-merge-pr` merges it and chains `/giga-workflow:post-merge-cleanup` → Done).
 - **Epic-branch mode:** commit onto `config.epicBranch`, push it (`git push origin <config.epicBranch>`), and transition the ticket to **Done** (no per-story PR — the epic lands on `<git.mainBranch>` via one PR at the end).
 - **Direct mode:** commit on the story branch, rebase it onto `origin/<git.mainBranch>` if that moved, fast-forward `<git.mainBranch>` to it and push `<git.mainBranch>` (no PR; the story branch is never pushed), transition the ticket to **Done**, and chain `/giga-workflow:post-merge-cleanup`, which deletes the local branch and moves the story out of its wave.
+- **Skill-only story** (any mode; the whole diff is in the skills repo's story worktree): land it on the skills repo's live branch and push it, then take the ticket to **Done** with no PR.
+- **Mixed story** (skills-repo files too): the skills leg lands on the skills repo's live branch and is pushed first, so it is live before this repo's PR is reviewed.
 
 ### 9d — Stop
 
@@ -324,6 +326,8 @@ and nothing to merge; do not point at `/giga-workflow:epic-merge-pr`. Print inst
 Next on the board: <next-KEY> — <next-summary>
 Run /giga-workflow:epic-next <board> in a new session (or another clone) to start it.
 ```
+
+**Skill-only story** (any mode): it reached Done inside `/giga-workflow:epic-story-complete`, with no PR. Print the direct-mode block with the first line `<KEY> landed on <skills branch> — <repo name> <skills-sha>`, taken from that skill's `Skills:` report line; the notification reads `'<KEY> · single story complete — landed on <skills branch> + Done'`.
 
 Print `<done> of <total> stories complete` with the shipped line, recomputed fresh as in Step 7 (epic-branch and direct modes: after the ticket reaches Done; PR mode: the story is counted once `/giga-workflow:epic-merge-pr` moves it to Done).
 
