@@ -150,6 +150,8 @@ Save the branch name for later steps.
 
 The wave plan lists what is **left**. A merged story that stays in it is drift, and nothing else reconciles it — so retire the entry here, at the one moment the story is genuinely finished.
 
+This step is also the only writer of the story's line in the epic's `## Shipped` on PR and direct boards. `/giga-workflow:epic-story-complete` writes that line only on an epic-branch board, which has no per-story cleanup.
+
 Skip silently if no ticket key was found.
 
 1. **Find the epic.** `grep -m1 '^epic:' <plans.repo>/<board>/<KEY>.md` (board = the lowercased key prefix, e.g. `ABC-78` → `abc`) gives `epic: <EPIC-KEY>` without reading the story. No such file, or no `epic:` line → skip.
@@ -158,12 +160,14 @@ Skip silently if no ticket key was found.
    S=<plans.script>
    python3 $S section <EPIC-KEY> Wave; python3 $S section <EPIC-KEY> Shipped --range
    ```
-   The first prints the wave plan and its line range on stderr; exit 1 means no `Wave` heading, so skip this
-   whole section. The second prints `<path> <start> <end>` for `## Shipped`, or exits 1 if the epic has none.
+   The first prints the wave plan and its line range on stderr; exit 1 means no `Wave` heading, so the epic
+   has no wave entry to remove, but it still gets its Shipped line. The second prints `<path> <start> <end>` for
+   `## Shipped`, or exits 1 if the epic has none.
    `Read` only those ranges (`offset`/`limit`): the whole wave range, and just the last ~5 lines of `## Shipped`,
    which is enough to anchor the append. Then edit `<plans.repo>/<board>/<EPIC-KEY>.md`:
    - **Remove** the story's one-line entry from its `### Wave N` section. If that leaves the wave empty, remove the wave heading too.
-   - **Append** to the `## Shipped` section (create it if absent), rewriting the line to say what the story *did* rather than what was wrong, and stamping the PR: `- <KEY> — <what shipped, past tense> *(was Wave <N>; PR #<N>)*`. Get the PR number from `gh pr list --state merged --head <branch-name> --json number --jq '.[0].number'` if it is not already known. With no PR (a direct-mode board), stamp the story's last commit on `<git.mainBranch>` instead, `git log -1 --format=%h -E --grep='<KEY>([^0-9]|$)' origin/<git.mainBranch>`: `*(was Wave <N>; <short-sha>)*`.
+   - **Append** the story's one line to the `## Shipped` section (create it if absent), saying what the story *did* rather than what was wrong: `- <KEY> — <what shipped, past tense, ≤10 words> *(Wave <N>; PR #<N>)*`. Get the PR number from `gh pr list --state merged --head <branch-name> --json number --jq '.[0].number'` if it is not already known. With no PR (a direct-mode board), stamp the story's last commit on `<git.mainBranch>` instead, `git log -1 --format=%h -E --grep='<KEY>([^0-9]|$)' origin/<git.mainBranch>`: `*(Wave <N>; <short-sha>)*`. With no wave plan, word it from the story's summary and drop `Wave <N>; `. A `## Shipped` kept as a table gets the same content as a row in its existing columns.
+   - **Once only.** Before appending, check the `## Shipped` range for the key: `sed -n '<start>,<end>p' <path> | grep -cE '^(- |\| ?)<KEY>([^0-9]|$)'`. A non-zero count means the line is already there (a re-run, or a line written before this step owned it), so append nothing.
 3. **Commit the plans repo:**
    ```bash
    cd <plans.repo> && git add <board>/<EPIC-KEY>.md && \
@@ -172,8 +176,6 @@ Skip silently if no ticket key was found.
    When `plans.autoPush` is true the repo pushes its own commits, so commit only, never `git push`, and
    ⚠️ never report the commit as unpushed or tell the user to push it. When `plans.autoPush` is false or
    absent, push the commit after committing.
-
-If the epic file has no wave section at all (step 2's first command exits 1), skip — that epic uses a different shape and has nothing to reconcile.
 
 ## Close the epic when its last story is Done
 
@@ -233,7 +235,7 @@ Post-merge cleanup complete:
 - Deleted remote branch: <branch-name> (or "already removed")
 - Jira <KEY>: transitioned to Done (or "no ticket found" or "already Done")
 - Sub-tasks: <N> → Done (or "none")
-- Wave plan: <EPIC-KEY> — <KEY> moved from Wave <N> to Shipped (or "no wave plan" / "skipped")
+- Wave plan: <EPIC-KEY> — <KEY> moved from Wave <N> to Shipped (or "added to Shipped, no wave plan" / "skipped")
 - Epic: <EPIC-KEY> → Done, last story shipped (or "<N> children still open" / "already Done" / "skipped")
 - Plan file: deleted <filename> (or "no matching plan found")
 

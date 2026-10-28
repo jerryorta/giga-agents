@@ -63,7 +63,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `git.mainBranch` | the PR base branch, the branch direct mode fast-forwards and pushes, and the branch this skill refuses to run on | `main` |
 | `git.branchPrefix` | the per-story branch prefix | `feat/` |
 | `commit.format` | the commit subject format (Step 3) | `<type>(<scope>): <KEY> <subject>` |
-| `commit.hooks` | whether a commit hook validates the message | when `false`, check the subject against Step 3 yourself before committing |
+| `commit.hooks` | whether a commit hook validates the message | `false`: check the subject against Step 3 yourself before committing |
 | `commit.refactorCommitFirst` | whether a plan file's `## Refactor (in place)` list becomes its own commit ahead of the feature (Step 5) | `true` |
 | `docs.constraints` | the constraints doc holding the refactor-when-touched rule (Steps 2, 10) | state the rule without the pointer |
 | `storybook.ports` | the ports `scripts/stop-storybook.sh` checks (Step 11) | the script does nothing |
@@ -407,7 +407,7 @@ Rules:
 - **Verdict stories still get one.** A story that shipped nothing but a decision (REJECTED, DROP, KEEP) has the most valuable outcome of all — record the verdict and the reasoning that closed the fork.
 - If the story surfaced a lock a *sibling* must act on, that is an `epicEvolutionItems` entry (Step 2) targeting the sibling — this section is the durable record, not the propagation mechanism.
 
-Then, and only then, touch the parent epic: its `## Shipped` entry is **one line** — `KEY — <≤10-word label> · PR #<N>` (direct mode: the chained `/giga-workflow:post-merge-cleanup` writes it, stamped with the SHA, in Step 10.5) — and if a pin is genuinely cross-cutting it earns **one line** in the epic's lock index: the claim and where it is pinned, with this story as owner. Never a paragraph, here or in the story file.
+Then, and only then, touch the parent epic. Write its `## Shipped` line here **only in epic-branch mode**, which has no per-story cleanup: one line, `- <KEY> — <what shipped, past tense, ≤10 words> *(Wave <N>; <short-sha>)*`, dropping `Wave <N>; ` when the epic has no wave plan. In PR and direct modes, do not write it: the `/giga-workflow:post-merge-cleanup` that the merge chains (`/giga-workflow:epic-merge-pr` in PR mode, Step 10.5 in direct mode) writes it in the same format once the story is on `<git.mainBranch>`. If a pin is genuinely cross-cutting, it earns **one line** in the epic's lock index: the claim and where it is pinned, with this story as owner. Never a paragraph, here or in the story file.
 
 ⚡ This edit and the Step 10 wave-plan edit both land in the plans repo. Make **both** edits, then commit
 them together in Step 10's single `Bash` call. Do not commit the plans repo twice.

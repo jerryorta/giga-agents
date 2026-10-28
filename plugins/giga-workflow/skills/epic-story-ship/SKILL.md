@@ -156,7 +156,7 @@ Print the `/giga-workflow:epic-merge-pr` Step 4 pre-flight block in the same mes
 
 **C2 — Jira leg without re-reads.** The ticket's status is In Review (Step 6 just set it) and its sub-tasks are Done (Step 7 just closed them, or there were none) — do not re-fetch either. Transition `<KEY>` → Done (match by name), and re-transition only a sub-task Step 7 reported as a straggler. Its *Close the epic when its last story is Done* check still runs: the open-children `board` query rides in composition step 5's `Bash` call (after the Done transition has landed), and a `[]` result transitions the epic → Done in the report message. In that same message, invoke the skill named in `epicCloseSkill` as `<epicCloseSkill> closed <EPIC-KEY>`; its block ends § Final report. Without `epicCloseSkill` this hand-off is skipped.
 
-**C3 — wave plan: remove the wave entry only.** `/giga-workflow:epic-story-complete` Step 9 already wrote the story's one `## Shipped` line (`- <KEY> — <label> *(Wave <N>; PR #<N>)*`); the cleanup step removes the story's `### Wave N` entry (and the wave heading if that empties it) and writes **no second Shipped line**. Its own plans-repo commit is dropped — the edit rides in amendment A4's single commit.
+**C3 — wave plan: the cleanup's edit, without its commit.** `/giga-workflow:post-merge-cleanup`'s wave-plan step runs as written. It removes the story's `### Wave N` entry (and the wave heading if that empties it) and writes the story's one `## Shipped` line; `/giga-workflow:epic-story-complete` Step 9 writes none on a PR board. Stamp the line with this run's PR number `N`, with no `gh pr list` lookup. Its own plans-repo commit is dropped: the edit rides in amendment A4's single commit.
 
 ### Secrets repos
 
