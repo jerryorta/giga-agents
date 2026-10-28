@@ -32,6 +32,10 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 
 ```json
 {
+  "ideas": {
+    "policy": "docs/process/ideas.md",
+    "board": "https://example.com/idea-board"
+  },
   "ux": {
     "brandVoice": {
       "guides": [
@@ -44,10 +48,6 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
         }
       ]
     },
-    "ideas": {
-      "policy": "docs/process/ideas.md",
-      "board": "https://example.com/idea-board"
-    },
     "devServerSkill": "dev-server",
     "viewportDoc": "docs/viewports.md",
     "backNavigationRule": "docs/constraints.md § Back Navigation"
@@ -58,7 +58,7 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 | Field | Used for |
 | --- | --- |
 | `ux.brandVoice.guides` | the voice guide checked for each app's copy |
-| `ux.ideas.policy` · `ux.ideas.board` | how ideas and out-of-scope findings reach the owner |
+| `ideas.policy` · `ideas.board` | how ideas and out-of-scope findings reach the owner (top level: shared by every plugin) |
 | `ux.devServerSkill` | the skill that starts the app for a review |
 | `ux.viewportDoc` | breakpoints beyond the default 320 px, 390 px and 768–1023 px |
 | `ux.backNavigationRule` | the repo's rule for in-app Back |

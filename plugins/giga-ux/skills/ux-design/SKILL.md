@@ -15,13 +15,13 @@ Scales, heuristics and sources: `${CLAUDE_SKILL_DIR}/reference.md`. Read it befo
 
 ## Project config
 
-What differs from repo to repo comes from `.claude/giga/config.json` at the repository root, under `ux`. Read it once at the start. A missing file or field takes the fallback below, never a guess.
+What differs from repo to repo comes from `.claude/giga/config.json` at the repository root: the `ux` key, plus the top-level `ideas` key that every plugin shares. Read it once at the start. A missing file or field takes the fallback below, never a guess.
 
 | Field | Used for | When absent |
 | --- | --- | --- |
 | `brandVoice.guides[]` — `brand`, `apps`, `file`, `status`, `note` | the voice guide for the app being worked on (`reference.md` § Words — Which voice guide) | say no guide exists and apply the § Words rules alone |
-| `ideas.policy` | its § Check for a match first and § Entry threshold, for every idea, recommendation and new scope | check the repo's open tickets for a match; ideas stay in the report for the owner |
-| `ideas.board` | the Idea Board the dispatching session writes to | no board; the owner reads the report |
+| `ideas.policy` (top level) | its § Check for a match first and § Entry threshold, for every idea, recommendation and new scope | check the repo's open tickets for a match; ideas stay in the report for the owner |
+| `ideas.board` (top level) | the Idea Board the dispatching session writes to | no board; the owner reads the report |
 | `devServerSkill` | the skill that runs the app for Review | use the URL the dispatcher gave; with none, the app cannot be run |
 | `viewportDoc` | breakpoints the app ships beyond 320 px, 390 px and the 768–1023 px band | those three |
 | `backNavigationRule` | the repo's rule for what an in-app Back may call | Review step 5 as written |
