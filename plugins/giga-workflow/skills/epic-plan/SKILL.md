@@ -350,6 +350,7 @@ Then call `ExitPlanMode`. Ask the user these questions explicitly (use AskUserQu
 4. **Split confirmation** — "Accept the proposed splits (backend first), amend, or skip?" — and, for an epic with no children yet, "Create these stories?"
 5. **Existing Backlog stories** (only when the epic already has children in Backlog) — "Move <KEYs> to <jira.createStatus>, or leave any parked?" The default is to move them: in this workflow every story gets worked, and `/giga-workflow:epic-next` cannot see a Backlog story. The question exists because a story the user parked on purpose stays parked (evolution rule 3).
 6. **Challenge ideas** (only when Step 6.7 has any) — "Adopt, park or decline each one, here or on the Idea Board." Record each decision on the board (`ideas.board`; `update` `status`, `decision`, `decidedAt`); a decline needs a one-line reason. An adopted `add` joins "Stories to create"; an adopted `cut` removes or parks the story it names; an adopted `fix` becomes a story or an edit to the sibling whose scope it is. There is no one-to-one card-to-story ratio: group adopted entries into stories that make sense to build together. Cosmetic fixes on one page go in one story; entries that share a page, component or flow may share one too, at your judgement. Each story lists its source entry ids. Nothing the owner did not adopt changes the plan, and no idea is minted as a story any other way.
+7. **Seeded board** (only when `baseFromTemplate`) — "Keep the seeded `app`, `libraries`, `routingFiles`, `buildCommand`, `commitScope` and `conventions`, or adjust them to the shape the template notes describe?"
 
 Proceed to Step 10 ONLY when all of them are answered. If the user amends the wave plan or the splits, re-present and re-confirm before writing.
 
@@ -377,7 +378,7 @@ parent = <epicKey> AND status = "<jira.createStatus>"
 
 **Hybrid mode:** carry forward from `baseConfig.hybridMode` if it exists (a legacy `true` is written as `"conditional"`); otherwise `false`. `false` = `/giga-workflow:epic-loop` ships every story unattended. Use `"conditional"` when stories' Phase 6/7 verification requires `/giga-workflow:epic-cross-actor-test`, which needs two browser profiles and a human: `/giga-workflow:epic-loop` then pauses on those stories and ships the rest unattended. A story whose need is already known can carry `crossActor: true` (or a scenario string) or `crossActor: false` in its front matter, and that overrides the loop's triage. A story that follows an established pattern (no new design, shared primitive or cross-library refactor) can carry an optional `model: sonnet` (or `opus` / `haiku`), which `/giga-workflow:epic-loop` uses for that story's agent. Surface a one-line note in the Step 13 summary so the user knows to hand-edit the field if the epic actually needs hybrid mode.
 
-**App/library/convention/designReferences fields:** carry forward from `baseConfig` unchanged. If `baseConfig` is null (new board), set placeholder values and note them to the user after writing.
+**App/library/convention/designReferences fields:** carry forward from `baseConfig` unchanged, as is every key it holds that the Step 12 skeleton does not list (e.g. `crossActor`, `domainMemoryIndex`). If `baseConfig` is null (new board), set placeholder values and note them to the user after writing.
 
 ## Step 10.5 — Create the confirmed stories and move statuses to `<jira.createStatus>`
 
@@ -507,7 +508,7 @@ copies of the same 1.6KB, written by this step on every re-plan. They drifted: o
 discovery rule and forked a weaker epic-description rule. Restating them here is what regenerates
 that drift, which is why this step no longer does it.
 
-If `baseConfig` was null (new board), output a warning listing the fields that need to be filled in manually: `app`, `libraries`, `routingFiles`, `conventions`, `buildCommand`. When the board template seeded them (`baseFromTemplate`), list the same fields as `seeded from <boardTemplate> — confirm` instead.
+If `baseConfig` was null (new board), output a warning listing the fields that need to be filled in manually: `app`, `libraries`, `routingFiles`, `conventions`, `buildCommand`. When the board template seeded them (`baseFromTemplate`), list the same fields and `commitScope` as `seeded from <boardTemplate> — confirm` instead.
 
 ## Step 13 — Summary
 
