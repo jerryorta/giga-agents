@@ -104,7 +104,9 @@ never a slice, a branch or a story. A finding in what this story built is never 
 Return `NEEDS_HUMAN` (§8) — leaving the branch in place, uncommitted, for a human to pick up — for
 anything in `loop.neverUnattended`, plus:
 
-- a **merge conflict** on the PR
+- a **merge conflict** on the PR, or on a direct board (`mergeMode: "direct"`) a rebase conflict or a
+  refused push of `<git.mainBranch>` at `/giga-workflow:epic-story-complete`; the work is committed by then, so name
+  the branch that holds it in `blocker`
 - anything destructive or hard to reverse that the ticket did not explicitly ask for
 - a `story` UX finding whose fix would need a genuinely new feature beyond the story's goal and
   acceptance: the question and your recommendation go in `decisions[]`, and no Idea Board entry is written
@@ -283,9 +285,11 @@ each result returns to your `Agent` call. Give each a tight brief and ask for a 
   `Explore` or Sonnet sub-agent, which returns conclusions with `file:line`, never file dumps. Targeted
   reads of files you are about to edit stay with you.
 - **Shipping.** Once the gate is green and every review has returned (§6.5), one sub-agent runs
-  `/giga-workflow:epic-evolution-audit` (when enabled), `/giga-workflow:epic-story-complete --yes`, then `/giga-workflow:epic-merge-pr --yes`. Its
-  brief carries what the plan-file Outcome needs: the decisions, pins and summary. It returns the PR
-  number, merged state, Jira status and evolution lines, which you fold into §8.
+  `/giga-workflow:epic-evolution-audit` (when enabled), `/giga-workflow:epic-story-complete --yes`, then `/giga-workflow:epic-merge-pr --yes`. On a
+  direct board it stops after `/giga-workflow:epic-story-complete --yes`, which already fast-forwards and pushes
+  `<git.mainBranch>`. Its brief carries what the plan-file Outcome needs: the decisions, pins and
+  summary. It returns the PR number (the commit SHA on a direct board), merged state, Jira status and
+  evolution lines, which you fold into §8.
 
 Nested reviewers (`giga-ux:ux-reviewer`, `giga-ux:ux-architect`, the 5b reviews) are unchanged.
 
@@ -412,12 +416,13 @@ FAILED whenever the model emphasises it; a fenced block is immune to that.)
 | `PR_OPEN_UNMERGED` | PR opened and ticket In Review, but the merge did not land | Branch pushed, PR open |
 | `AWAITING_ACTOR_TEST` | Gate green and checks done, but the story needs cross-actor testing (§7.5) | Branch in place with the finished work, uncommitted |
 | `BLOCKED` | Ticket not implementable as written (§4) | No branch, or a branch with no commits |
-| `NEEDS_HUMAN` | Hit §5, or an `UNCLEAR` decision (§6.4) | Branch in place with the work so far, uncommitted |
+| `NEEDS_HUMAN` | Hit §5, or an `UNCLEAR` decision (§6.4) | Branch in place with the work so far, uncommitted (committed after a direct board's rebase conflict or refused push, §5) |
 | `FAILED` | Implementation attempted and the gate could not be made green | Branch in place; put the failing output in `blocker` |
 
 Populate `blocker` with the specific, actionable reason for every status except `SHIPPED` — it is
 what the orchestrator shows the user and what a retry is given to work with. Set every field you
-know; use `null` for what genuinely does not apply.
+know; use `null` for what genuinely does not apply. On a direct board `pr` is always `null`: the story
+reaches `<git.mainBranch>` with no PR.
 
 **`recommended` and `implemented` are what the orchestrator machine-checks.** Record every decision
 the ladder touched, and set `recommended` to what §6.1–6.3 actually returned — not to what you did.
@@ -449,6 +454,8 @@ browser verification          # §7 — only when the board sets loop.browserVer
 /giga-workflow:epic-evolution-audit         # only when the board config sets loop.evolutionAudit
                               # §7.5 — a story needing cross-actor testing stops HERE: AWAITING_ACTOR_TEST
 /giga-workflow:epic-story-complete --yes    # commit (cz format) + push + PR + ticket → In Review
+                              # direct board: commit + fast-forward + push <git.mainBranch> + ticket Done
+                              #   + chain /giga-workflow:post-merge-cleanup; the chain ends here
 /giga-workflow:epic-merge-pr --yes          # merge (git.mergeMethod) + chain /giga-workflow:post-merge-cleanup → ticket Done
                               # audit + complete + merge run in one Sonnet ship sub-agent (§6.9)
 <fenced JSON report>          # §8 — last thing in your turn

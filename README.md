@@ -41,8 +41,8 @@ Components are namespaced by the plugin: `/giga-ux:ux-design`, the agents `giga-
 
 - **Jira**, through the Atlassian MCP connector, for status: transitions, comments, new issues.
 - **A plans repo** holding each ticket's content as Markdown (`<board>/<KEY>.md`), with a script that implements `ensure <KEY>` (fetch a ticket to its file), `board --jql <jql>` (list a board's status), `section <KEY> <heading>` and `stub <KEY>`. Ticket content lives there rather than in Jira; Jira keeps status. The script is not part of this repo.
-- **Board configs**: one `.claude/giga/epic.<board>.json` per board (epic key, JQL, story order, commit scope, build command, app and libraries, conventions). `/giga-workflow:epic-plan` writes them and `/giga-workflow:epic-config` edits them.
-- **GitHub** and the `gh` CLI for pull requests.
+- **Board configs**: one `.claude/giga/epic.<board>.json` per board (epic key, JQL, story order, commit scope, build command, app and libraries, conventions). `/giga-workflow:epic-plan` writes them and `/giga-workflow:epic-config` edits them. Each board picks a `mergeMode`: `pr` (the default) opens a pull request per story; `epic-branch` commits every story onto one epic branch that lands through one pull request; `direct` fast-forwards each story into the main branch and pushes it, with no pull request.
+- **GitHub** and the `gh` CLI for pull requests, which only `pr` boards and an epic-branch landing need.
 - `giga-ux`, for the UX phases of `/jira` and for `/epic-review`. Without it those phases are skipped.
 
 ## What `giga-standards` expects
@@ -127,6 +127,7 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
     "browser": { "renderingFiles": "\\.(tsx|css)$" },
     "notify": null,
     "memoryDir": null,
+    "boardTemplate": ".claude/giga/board-template.json",
     "epicCloseSkill": null
   },
   "standards": {
@@ -159,7 +160,7 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 | `workflow.git` · `workflow.commit` | base branch, branch prefix, merge method, auto-merge, CI; commit format and scope rules |
 | `workflow.checks` · `workflow.docs` | the build/lint/test gate and single-target command; the standards docs and `AGENTS.md` locations |
 | `workflow.devServers` · `workflow.devServerPrelude` · `workflow.storybook` | how to start each app and Storybook, and on which port |
-| `workflow.planning` | dependency signals and path globs `/epic-plan` and `/jira` use to split and order work |
+| `workflow.planning` · `workflow.boardTemplate` | dependency signals and path globs `/epic-plan` and `/jira` use to split and order work; the starter board `/epic-plan` seeds a new board from |
 | `workflow.loop` · `workflow.browser` | what an unattended run must hand to a human, where it keeps its ledger, precedent sources, browser checks |
 | `workflow.secrets` · `workflow.notify` · `workflow.memoryDir` · `workflow.epicCloseSkill` | optional: secrets repos to sync after a merge, desktop notifications, a personal memory folder, a skill to run when an epic closes |
 | `standards` | which docs `giga-standards` injects for each kind of file, the Bash source-file pattern and the byte budget (see What `giga-standards` expects) |

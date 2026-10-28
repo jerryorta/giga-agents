@@ -1,17 +1,17 @@
 ---
 name: post-merge-cleanup
-description: "Clean up after a PR merge: delete the merged branch (local + remote) and transition the Jira ticket to Done: $ARGUMENTS"
+description: "Clean up after a PR merge or a direct-mode merge: delete the merged branch (local, and remote when it was pushed) and transition the Jira ticket to Done: $ARGUMENTS"
 ---
 
-Clean up after a PR merge: delete the merged branch (local + remote) and transition the Jira ticket to Done: $ARGUMENTS
+Clean up after a PR merge or a direct-mode merge: delete the merged branch (local, and remote when it was pushed) and transition the Jira ticket to Done: $ARGUMENTS
 
-> **Two modes:** (1) **PR-mode boards** — run per story on the merged `<git.branchPrefix><key>-<slug>` branch (deletes it + transitions the story → Done). (2) **Epic-branch-mode boards** (`mergeMode:"epic-branch"`) — stories were already taken to Done by `/giga-workflow:epic-story-complete`, so here you run this **once per epic** on the merged epic branch (e.g. `/giga-workflow:post-merge-cleanup <git.branchPrefix>abc-123-short-slug`) to delete the epic branch + transition the **epic** ticket → Done. The branch-name key parse picks up whichever key the branch encodes (story or epic).
+> **Three modes:** (1) **PR-mode boards** — run per story on the merged `<git.branchPrefix><key>-<slug>` branch (deletes it + transitions the story → Done). (2) **Epic-branch-mode boards** (`mergeMode:"epic-branch"`) — stories were already taken to Done by `/giga-workflow:epic-story-complete`, so here you run this **once per epic** on the merged epic branch (e.g. `/giga-workflow:post-merge-cleanup <git.branchPrefix>abc-123-short-slug`) to delete the epic branch + transition the **epic** ticket → Done. (3) **Direct-mode boards** (`mergeMode:"direct"`) — run per story, chained by `/giga-workflow:epic-story-complete` right after it fast-forwards `<git.mainBranch>` to the story branch and pushes it. The story branch was never pushed and the ticket is usually already Done, so this deletes the local branch, reconciles the wave plan and closes the epic when it was the last story. The branch-name key parse picks up whichever key the branch encodes (story or epic).
 
-> ⚠️ **On a PR-mode board, prefer `/giga-workflow:epic-merge-pr <N>` over calling this skill directly — including when you reviewed and merged the PR on github.com.** `/giga-workflow:epic-merge-pr` is idempotent: it reads an already-`MERGED` PR and skips straight to chaining this skill, so it is never the wrong call. What it adds on top is the part a manual merge silently skips — it verifies the PR genuinely reached `MERGED` before anything is deleted, and it repairs a local `<git.mainBranch>` left a commit stale when `gh pr merge --delete-branch` fails with only a warning. That stale `<git.mainBranch>` is what the next story's branch gets cut from, so the repair is not cosmetic. Run this skill standalone only on an **epic-branch-mode** epic branch, which `/giga-workflow:epic-merge-pr` refuses by design.
+> ⚠️ **On a PR-mode board, prefer `/giga-workflow:epic-merge-pr <N>` over calling this skill directly — including when you reviewed and merged the PR on github.com.** `/giga-workflow:epic-merge-pr` is idempotent: it reads an already-`MERGED` PR and skips straight to chaining this skill, so it is never the wrong call. What it adds on top is the part a manual merge silently skips — it verifies the PR genuinely reached `MERGED` before anything is deleted, and it repairs a local `<git.mainBranch>` left a commit stale when `gh pr merge --delete-branch` fails with only a warning. That stale `<git.mainBranch>` is what the next story's branch gets cut from, so the repair is not cosmetic. Run this skill standalone only on an **epic-branch-mode** epic branch, which `/giga-workflow:epic-merge-pr` refuses by design. This note applies to PR-mode boards only: a direct-mode board has no PR, and its stories reach this skill through `/giga-workflow:epic-story-complete`.
 
 ## Project config
 
-Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow` (plus the top-level `ideas` key every plugin shares). Read it once at the start. A missing file or field takes the fallback below, never a guess.
+Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow`. Read it once at the start. A missing file or field takes the fallback below, never a guess.
 
 | Field | Used for | When absent |
 | --- | --- | --- |
@@ -94,7 +94,7 @@ Save the branch name for later steps.
    ```
    git ls-remote --heads origin <branch-name>
    ```
-   - If the output is empty, the remote branch was already removed (e.g., via GitHub PR merge) — skip deletion and report it was already removed.
+   - If the output is empty, the remote branch was already removed (e.g., via GitHub PR merge) or, on a direct-mode board, never existed (the story branch is never pushed) — skip deletion and report it was already removed.
    - If the output is non-empty, delete it:
      ```
      git push origin --delete <branch-name>
@@ -163,7 +163,7 @@ Skip silently if no ticket key was found.
    `Read` only those ranges (`offset`/`limit`): the whole wave range, and just the last ~5 lines of `## Shipped`,
    which is enough to anchor the append. Then edit `<plans.repo>/<board>/<EPIC-KEY>.md`:
    - **Remove** the story's one-line entry from its `### Wave N` section. If that leaves the wave empty, remove the wave heading too.
-   - **Append** to the `## Shipped` section (create it if absent), rewriting the line to say what the story *did* rather than what was wrong, and stamping the PR: `- <KEY> — <what shipped, past tense> *(was Wave <N>; PR #<N>)*`. Get the PR number from `gh pr list --state merged --head <branch-name> --json number --jq '.[0].number'` if it is not already known.
+   - **Append** to the `## Shipped` section (create it if absent), rewriting the line to say what the story *did* rather than what was wrong, and stamping the PR: `- <KEY> — <what shipped, past tense> *(was Wave <N>; PR #<N>)*`. Get the PR number from `gh pr list --state merged --head <branch-name> --json number --jq '.[0].number'` if it is not already known. With no PR (a direct-mode board), stamp the story's last commit on `<git.mainBranch>` instead, `git log -1 --format=%h -E --grep='<KEY>([^0-9]|$)' origin/<git.mainBranch>`: `*(was Wave <N>; <short-sha>)*`.
 3. **Commit the plans repo:**
    ```bash
    cd <plans.repo> && git add <board>/<EPIC-KEY>.md && \

@@ -110,6 +110,8 @@ Line shapes:
 {"ts":"2026-08-05T14:05:02Z","type":"waveOrder","keys":["ABC-123","ABC-124","ABC-125","ABC-126","ABC-127","ABC-128"]}
 ```
 
+On a `direct` board `pr` is `null`, and the summary table's PR column shows the story's short SHA instead.
+
 ## Step 1 — Pre-flight, once per run
 
 Run these before the first spawn. Any failure stops the run before a branch exists.
@@ -238,6 +240,9 @@ Keep the prompt this small — the contract file carries the weight, and it neve
 >
 > End your turn with the §8 fenced JSON report and nothing after it.
 
+On a board with `config.mergeMode === "direct"`, drop `→ /giga-workflow:epic-merge-pr --yes`: the chain ends at
+`/giga-workflow:epic-story-complete --yes`, which fast-forwards `<git.mainBranch>` to the story and pushes it.
+
 On `--resume`, append: *"A previous attempt escalated this decision: `<question>`. The answer is:
 `<answer>`. Adopt it and proceed — do not re-open it."*
 
@@ -260,13 +265,17 @@ git status --porcelain; git branch --show-current
 gh pr view <pr> --json state,mergedAt --jq '{state,mergedAt}'
 ```
 
+On a direct board there is no PR; the second command is
+`git fetch -q origin && git log origin/<git.mainBranch> --oneline -E --grep '<KEY>([^0-9]|$)'`.
+
 | Ground truth | Reading |
 |---|---|
 | Clean tree, on `<git.mainBranch>`, PR `MERGED` | genuinely `SHIPPED`, whatever the report said |
+| Direct board: clean tree, on `<git.mainBranch>`, the story's commit on `origin/<git.mainBranch>`, no PR | genuinely `SHIPPED`, whatever the report said |
 | Non-empty tree on a `<git.branchPrefix>` branch | implemented but never shipped — recoverable; treat as `FAILED` with that note, and let the retry run `/giga-workflow:epic-story-complete --yes` on the existing diff rather than redoing the work |
 | PR `OPEN` and tree clean | `PR_OPEN_UNMERGED` — the merge is what failed, not the story |
 | Report says `AWAITING_ACTOR_TEST`, non-empty tree on its `<git.branchPrefix>` branch, no PR | genuinely `AWAITING_ACTOR_TEST` |
-| Report says `SHIPPED` but no PR exists | `FAILED`; trust the filesystem over the prose |
+| Report says `SHIPPED` but no PR exists (on a direct board: the story's commit is not on `origin/<git.mainBranch>`) | `FAILED`; trust the filesystem over the prose |
 
 ### 2d.5 — Decision-adherence check
 
@@ -292,6 +301,9 @@ is not a diff read:
 ```bash
 gh pr view <pr> --json files --jq '[.files[].path | select(test("<browser.renderingFiles>"))] | length'
 ```
+
+On a direct board, count the story's commits on `<git.mainBranch>` instead:
+`git log origin/<git.mainBranch> -E --grep '<KEY>([^0-9]|$)' --name-only --format= | sort -u | grep -cE '<browser.renderingFiles>'`.
 
 **Exempt: the conventional-commit type.** A `decisions[]` entry whose subject is the commit type
 (`feat` vs `fix` vs `chore`) never trips this check, at any confidence. It changes no shipped
@@ -427,7 +439,7 @@ say which one is wrong. Then spawn one unnamed `general-purpose` agent at `loop.
 > Read `${CLAUDE_SKILL_DIR}/autonomy-contract.md` in full and follow it verbatim. You are the
 > story agent for board `<board>`, story `<KEY>`. Its cross-actor test passed and the work is on
 > `<branch>`, uncommitted. Re-run the `/giga-workflow:jira` Phase 6 gate if the tree changed since the pause, then
-> run `/giga-workflow:epic-story-complete --yes` → `/giga-workflow:epic-merge-pr --yes`. Report `crossActor.needed: true`,
+> run `/giga-workflow:epic-story-complete --yes` → `/giga-workflow:epic-merge-pr --yes` (on a direct board, `/giga-workflow:epic-story-complete --yes` alone). Report `crossActor.needed: true`,
 > `source: "triage"`. End with the §8 fenced JSON report and nothing after it.
 
 Run 2d and 2d.5 on its report. Skip the `needsActor` row of 2d.5, because the test was run. Record the

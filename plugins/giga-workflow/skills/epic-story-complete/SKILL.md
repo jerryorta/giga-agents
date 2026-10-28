@@ -1,9 +1,9 @@
 ---
 name: epic-story-complete
-description: Wrap up a finished epic story — commit the unstaged diff in strict Commitizen format, then either push + open a PR + move the Jira ticket to In Review (PR mode) or push the shared epic branch + move it to Done (epic-branch mode), record the story's outcome and its pins (one line each, pointing at the spec or rulebook rule) in its plan file, act on any epic-evolution follow-ups, and stop this checkout's Storybook servers. Use this whenever a story's implementation is done and reviewed and it needs shipping — after `/giga-workflow:epic-next` + `/giga-workflow:jira`, when the user says "wrap up the story", "commit and open the PR", "put it up for review", "finish this ticket", or invokes `/giga-workflow:epic-story-complete` directly, and as the ship step of an `/giga-workflow:epic-loop` story agent. When the user wants the PR merged in the same pass ("ship it", "ship and merge"), that is `/giga-workflow:epic-story-ship`, which runs this skill and then `/giga-workflow:epic-merge-pr --yes` behind one gate.
+description: Wrap up a finished epic story — commit the unstaged diff in strict Commitizen format, then either push + open a PR + move the Jira ticket to In Review (PR mode), push the shared epic branch + move it to Done (epic-branch mode), or fast-forward the main branch to the story, push it + move the ticket to Done (direct mode), record the story's outcome and its pins (one line each, pointing at the spec or rulebook rule) in its plan file, act on any epic-evolution follow-ups, and stop this checkout's Storybook servers. Use this whenever a story's implementation is done and reviewed and it needs shipping — after `/giga-workflow:epic-next` + `/giga-workflow:jira`, when the user says "wrap up the story", "commit and open the PR", "put it up for review", "finish this ticket", or invokes `/giga-workflow:epic-story-complete` directly, and as the ship step of an `/giga-workflow:epic-loop` story agent. When the user wants the PR merged in the same pass ("ship it", "ship and merge"), that is `/giga-workflow:epic-story-ship`, which runs this skill and then `/giga-workflow:epic-merge-pr --yes` behind one gate.
 ---
 
-Wraps up a finished epic story: commit the unstaged changes (in the strict conventional-commit format of `commit.format`), then either **(PR mode)** push the branch, open a PR, and transition the Jira ticket to **In Review**, or **(epic-branch mode)** push the shared epic branch the commit landed on and transition the ticket to **Done**. The path is set by `config.mergeMode` (`"pr"` default / `"epic-branch"`). Either way it then stops this checkout's Storybook servers (sibling clones untouched; `--keep-storybook` opts out). Designed as the natural session-end follow-up to `/giga-workflow:epic-next` (which leaves changes unstaged after `/giga-workflow:jira` finishes its in-conversation phases).
+Wraps up a finished epic story: commit the unstaged changes (in the strict conventional-commit format of `commit.format`), then either **(PR mode)** push the branch, open a PR, and transition the Jira ticket to **In Review**, or **(epic-branch mode)** push the shared epic branch the commit landed on and transition the ticket to **Done**, or **(direct mode)** fast-forward `<git.mainBranch>` to the story branch, push `<git.mainBranch>`, transition the ticket to **Done** and chain `/giga-workflow:post-merge-cleanup`. The path is set by `config.mergeMode` (`"pr"` default / `"epic-branch"` / `"direct"`). Either way it then stops this checkout's Storybook servers (sibling clones untouched; `--keep-storybook` opts out). Designed as the natural session-end follow-up to `/giga-workflow:epic-next` (which leaves changes unstaged after `/giga-workflow:jira` finishes its in-conversation phases).
 
 **Usage:**
 - `/giga-workflow:epic-story-complete` — preferred. Infer the board + ticket key from the current conversation context.
@@ -37,11 +37,12 @@ at all** — each of those re-read a ~346k context to say nothing. The steps bel
 
 Explicit batch points are marked ⚡.
 
-> **Session model:** one story per session. The conversation that ran `/giga-workflow:epic-next <board>`, planned via `/giga-workflow:jira`, implemented it, and ran the build/test gate is the same conversation that invokes this skill. The branch in play is the per-story `<git.branchPrefix><key>-<slug>` (PR mode) or the shared `config.epicBranch` (epic-branch mode) that `/giga-workflow:epic-next` put you on.
+> **Session model:** one story per session. The conversation that ran `/giga-workflow:epic-next <board>`, planned via `/giga-workflow:jira`, implemented it, and ran the build/test gate is the same conversation that invokes this skill. The branch in play is the per-story `<git.branchPrefix><key>-<slug>` (PR and direct modes) or the shared `config.epicBranch` (epic-branch mode) that `/giga-workflow:epic-next` put you on.
 
 > **Where this fits in the lifecycle:**
 > - **PR mode:** `/giga-workflow:epic-next` (pick + branch + /giga-workflow:jira) → `/giga-workflow:epic-story-complete` (commit + push + PR + → In Review) → `/giga-workflow:epic-merge-pr` (verify state + merge by `git.mergeMethod`; a reviewer merging by hand is equivalent) → `/giga-workflow:post-merge-cleanup` (delete branch + → Done). `/giga-workflow:epic-merge-pr` chains straight into `/giga-workflow:post-merge-cleanup`, so the last two are one step in practice.
 > - **Epic-branch mode:** `/giga-workflow:epic-next` (pick + checkout epic branch + /giga-workflow:jira) → `/giga-workflow:epic-story-complete` (commit onto `epicBranch` + push + → Done). The epic lands on `<git.mainBranch>` via one PR at the end (epic-level `/giga-workflow:post-merge-cleanup`).
+> - **Direct mode:** `/giga-workflow:epic-next` (pick + branch + /giga-workflow:jira) → `/giga-workflow:epic-story-complete` (commit + fast-forward `<git.mainBranch>` + push + → Done) → chained `/giga-workflow:post-merge-cleanup` (delete the local branch + wave plan). No PR.
 > - **One pass (PR mode):** `/giga-workflow:epic-story-ship` runs this skill and `/giga-workflow:epic-merge-pr --yes` back to back behind this skill's Step 4 gate alone — merged on `<git.mainBranch>` + Done in one session, no merge prompt. Use it when nobody needs to review the PR before it merges.
 
 ---
@@ -59,7 +60,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `jira.mcpPrefix` | the prefix of the Jira tool ids loaded in Step 0 | stop and say the repo has no `jira.mcpPrefix` in `.claude/giga/config.json` |
 | `jira.cloudId` | the Jira cloud id when the session has none (Step 1) | call `getAccessibleAtlassianResources` |
 | `jira.createStatus` | the status a new follow-up story is moved to (Step 10) | `To Do` |
-| `git.mainBranch` | the PR base branch and the branch this skill refuses to run on | `main` |
+| `git.mainBranch` | the PR base branch, the branch direct mode fast-forwards and pushes, and the branch this skill refuses to run on | `main` |
 | `git.branchPrefix` | the per-story branch prefix | `feat/` |
 | `commit.format` | the commit subject format (Step 3) | `<type>(<scope>): <KEY> <subject>` |
 | `commit.hooks` | whether a commit hook validates the message | when `false`, check the subject against Step 3 yourself before committing |
@@ -80,7 +81,7 @@ those results and does not re-run them by default. Pass `--build` for a final sa
 
 Refuse and stop when:
 
-- The branch is `<git.mainBranch>` or some unrelated branch. This skill expects the `/giga-workflow:epic-next` context: a `<git.branchPrefix><key>-<slug>` branch (PR mode) or the `config.epicBranch` (epic-branch mode).
+- The branch is `<git.mainBranch>` or some unrelated branch. This skill expects the `/giga-workflow:epic-next` context: a `<git.branchPrefix><key>-<slug>` branch (PR and direct modes) or the `config.epicBranch` (epic-branch mode).
 - The work spans multiple stories and the diff is mixed — split the changes manually first, then run this skill once per story (each on its own per-story branch).
 - The PR is already open for this branch — this is a finalize-once skill; subsequent edits on the same branch are handled by `git commit` + `git push` directly (the existing PR auto-updates).
 
@@ -110,7 +111,7 @@ select:<jira.mcpPrefix>getAccessibleAtlassianResources,<jira.mcpPrefix>getJiraIs
 
 **Parse the remaining flags** (after stripping board + key):
 
-- `--no-push` — skip push + `gh pr create` + Jira transition + final comment. Commit locally and finalize later.
+- `--no-push` — skip push + `gh pr create` + Jira transition + final comment (direct mode: the merge into `<git.mainBranch>` too). Commit locally and finalize later.
 - `--type=<type>` — override the commit type (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `style`, `ci`, `build`, `revert`).
 - `--build` — re-run `config.buildCommand` before committing (useful after a long pause between `/giga-workflow:jira` finishing and this skill running).
 - `--yes` — skip the Step 4 gate and proceed straight to commit/push/PR/transition; the pre-flight block still prints for the record. For autonomous callers that have already gated on a clean cross-actor PASS.
@@ -207,14 +208,14 @@ Ticket summary:   <Jira summary>
 Ticket status:    <current status>  →  <In Review | Done>
 
 Branch:           <current-branch>   (per-story branch | epic branch ✓)
-Merge mode:       <pr | epic-branch>
+Merge mode:       <pr | epic-branch | direct>
 Files changed:    <N> (<insertions>+ / <deletions>->)
 
 Proposed commit (`commit.format`, <subject-length>/100 chars):
   <subject line>
 
-Push:             <yes | no (--no-push)>   → <git push -u origin <branch> | git push origin <epicBranch>>
-PR:               <will open via gh after push | n/a — epic-branch mode | skipped (--no-push)>
+Push:             <yes | no (--no-push)>   → <git push -u origin <branch> | git push origin <epicBranch> | git push origin <git.mainBranch>, fast-forwarded to <branch>>
+PR:               <will open via gh after push | n/a — epic-branch mode | n/a — direct mode | skipped (--no-push)>
 Build re-run:     <yes (--build) | no>
 Final comment:    will post the commit/PR link back to <KEY>
 Storybook:        will stop this checkout's server(s)   (--keep-storybook → left running)
@@ -263,7 +264,7 @@ the SAME substitutions on the restored file so both sides carry byte-identical r
 patch applies without conflict. A hunk that only adds, removes or rewords a comment is a refactor hunk; a
 mixed hunk rides with the feature.
 
-**PR mode** (`config.mergeMode !== "epic-branch"`) — the whole ship in one call:
+**PR mode** (`config.mergeMode` absent or `"pr"`) — the whole ship in one call:
 
 ```bash
 git add -A && git commit -m "$(cat <<'EOF'
@@ -304,12 +305,34 @@ EOF
 )" && git rev-parse --short HEAD && git push origin <config.epicBranch>
 ```
 
+**Direct mode** (`config.mergeMode === "direct"`) — the story lands on `<git.mainBranch>` with no PR. Commit on the story branch, bring it up to date with `origin/<git.mainBranch>`, fast-forward `<git.mainBranch>` to it and push, in one call:
+
+```bash
+git add -A && git commit -m "$(cat <<'EOF'
+<subject>
+
+<co-author trailer>
+EOF
+)" && git fetch origin <git.mainBranch> \
+  && { git merge-base --is-ancestor origin/<git.mainBranch> HEAD \
+       || git rebase origin/<git.mainBranch> \
+       || { git rebase --abort; echo "rebase conflict — not merged"; false; }; } \
+  && git checkout <git.mainBranch> && git merge --ff-only <current-branch> \
+  && git push origin <git.mainBranch> && git rev-parse --short HEAD
+```
+
+The rebase is safe because the story branch was never pushed. The chain prints the short SHA of the story's last commit on `<git.mainBranch>`, which Steps 8, 9 and 12 use. Direct mode never pushes the story branch and never force-pushes. It ignores `git.mergeMethod` and always fast-forwards: a squash would fold the refactor commit into the feature commit.
+
 Failure handling:
 
 - **Pre-commit hook fails** → report it, leave the changes staged, do **not** retry with `--no-verify`, do **not** amend. The chain already stopped before the push.
-- **`--no-push`** → run the `git add && git commit && git rev-parse` portion only. Then stop: print "Commit ready locally. Run `git push …` + `gh pr create` manually when ready (or re-run without `--no-push`)." and exit cleanly. **Leave the Storybook servers running and skip the Step 11 notification** — the story isn't finished on this path, just committed locally.
+- **`--no-push`** → run the `git add && git commit && git rev-parse` portion only. Then stop: print "Commit ready locally. Run `git push …` + `gh pr create` manually when ready (or re-run without `--no-push`)." and exit cleanly. **Leave the Storybook servers running and skip the Step 11 notification** — the story isn't finished on this path, just committed locally. Direct mode: commit only — no fetch, rebase, merge or push.
 - **Push rejected, PR mode** → stop and surface it. Do **not** force-push. Per-story branches are short-lived; a name collision means a deeper coordination issue the user must investigate.
 - **Push rejected, epic-branch mode** → someone advanced the epic branch. `git pull --rebase origin <config.epicBranch>` then push; on conflict, stop and surface it. Never force-push. The commit is safe locally.
+- **Rebase conflict, direct mode** → the chain already ran `git rebase --abort`. Stop and surface the conflict; the commit is safe on the story branch and `<git.mainBranch>` is untouched.
+- **Fast-forward refused, direct mode** → local `<git.mainBranch>` carries commits `origin/<git.mainBranch>` lacks. Stop and surface `git log origin/<git.mainBranch>..<git.mainBranch>`; `<git.mainBranch>` is unchanged and the commit is safe on the story branch.
+- **Push rejected as non-fast-forward, direct mode** → `origin/<git.mainBranch>` moved after the fetch. Local `<git.mainBranch>` now holds only the story's commits on top of the old tip, so run `git checkout <current-branch> && git branch -f <git.mainBranch> origin/<git.mainBranch>` and re-run the chain from `git fetch`.
+- **Push refused by branch protection, direct mode** (a ruleset the account cannot bypass) → stop. Local `<git.mainBranch>` is ahead of `origin/<git.mainBranch>`. Tell the user to push it themselves, or to switch the board to `"pr"` with `/giga-workflow:epic-config <board>`. Never force-push.
 - **`gh pr create` fails** (missing auth, etc.) → surface the error. The commit + push already succeeded; the user can retry the PR creation manually.
 
 ## Step 6 — Transition the ticket
@@ -323,6 +346,7 @@ transitionJiraIssue(cloudId, KEY, transition={id: <matched-id>})
 
 - **PR mode** → match **In Review** (case-insensitive; common variants "In Review", "Code Review", "Ready for Review" — prefer the exact "In Review"). If no review state is reachable, surface the available transitions and let the user pick; if the workflow has no review state at all, leave the ticket In Progress, note it in the final report, and still post the Step 8 comment so the linkage is captured.
 - **Epic-branch mode** → match **Done**. The story is integrated into `config.epicBranch` and verified; there is no per-story PR to wait on, which mirrors how an epic-branch story is closed by hand. If no Done transition is reachable, surface the options and let the user pick.
+- **Direct mode** → match **Done**, as in epic-branch mode: the story is already on `<git.mainBranch>`. If no Done transition is reachable, surface the options and let the user pick.
 
 ## Step 7 — Close the story's sub-tasks
 
@@ -337,7 +361,7 @@ If a sub-task can't reach Done directly (workflow gap), surface it and continue 
 ⚡ **Issue this in the same message as Step 6's transition** — they're independent once the PR URL is in
 hand — and in the same message as Step 7's sub-task transitions where there are any.
 
-Post a short ADF comment so the work is discoverable without scanning git history. PR mode links Jira → PR; epic-branch mode has no PR, so head it "Committed on epic branch" and drop the PR-link paragraph.
+Post a short ADF comment so the work is discoverable without scanning git history. PR mode links Jira → PR; epic-branch mode has no PR, so head it "Committed on epic branch" and drop the PR-link paragraph. Direct mode has no PR either: head it "Merged to `<git.mainBranch>`", drop the PR-link paragraph, and give the SHA on `<git.mainBranch>` (`Commit: <short-sha> on <git.mainBranch> (epic <config.epicKey>).`).
 
 ```json
 { "version": 1, "type": "doc", "content": [
@@ -379,11 +403,11 @@ Append to the local plan file (never to Jira's description — see the plans gui
 Rules:
 
 - **A lock is pinned in the code or the rulebook, never narrated here.** Something a future story would get wrong is recorded as, in order of preference: a spec that fails when it is broken; a rule in the library's `AGENTS.md` (one sentence, the invariant and its reason); a two-line comment at the site. This subsection is ONE line per pin — the claim and where it is pinned. No reasoning, no measurement, no ⚠️ narrative: if the reason matters it is in the spec's name or the rulebook sentence. A claim that cannot be pinned in any of those three places is a preference, not a lock — drop it. Not a changelog of the diff; git has that.
-- **Write it even in epic-branch mode** (no PR — head the section `## Outcome — shipped (<short-sha>)`).
+- **Write it even in epic-branch and direct modes** (no PR — head the section `## Outcome — shipped (<short-sha>)`).
 - **Verdict stories still get one.** A story that shipped nothing but a decision (REJECTED, DROP, KEEP) has the most valuable outcome of all — record the verdict and the reasoning that closed the fork.
 - If the story surfaced a lock a *sibling* must act on, that is an `epicEvolutionItems` entry (Step 2) targeting the sibling — this section is the durable record, not the propagation mechanism.
 
-Then, and only then, touch the parent epic: its `## Shipped` entry is **one line** — `KEY — <≤10-word label> · PR #<N>` — and if a pin is genuinely cross-cutting it earns **one line** in the epic's lock index: the claim and where it is pinned, with this story as owner. Never a paragraph, here or in the story file.
+Then, and only then, touch the parent epic: its `## Shipped` entry is **one line** — `KEY — <≤10-word label> · PR #<N>` (direct mode: the chained `/giga-workflow:post-merge-cleanup` writes it, stamped with the SHA, in Step 10.5) — and if a pin is genuinely cross-cutting it earns **one line** in the epic's lock index: the claim and where it is pinned, with this story as owner. Never a paragraph, here or in the story file.
 
 ⚡ This edit and the Step 10 wave-plan edit both land in the plans repo. Make **both** edits, then commit
 them together in Step 10's single `Bash` call. Do not commit the plans repo twice.
@@ -425,6 +449,10 @@ EOF
 
 If any Jira call fails, report it and continue — a failed follow-up must not roll back the shipped story, but it MUST be surfaced as an explicit "not created" line rather than dropped silently.
 
+## Step 10.5 — Direct mode: chain `/giga-workflow:post-merge-cleanup`
+
+Direct mode only, and only when Step 5 pushed `<git.mainBranch>` (never under `--no-push`). Right after Step 10's plans-repo commit, invoke `/giga-workflow:post-merge-cleanup <current-branch>` with the `Skill` tool, the way `/giga-workflow:epic-merge-pr` chains it. It deletes the local story branch (the remote one never existed), finds the ticket already Done, moves the story out of its wave into `## Shipped` stamped with the SHA, and closes the epic when this was its last story. Fold its summary into the Step 12 report rather than printing it. A cleanup failure never rolls the merge back: report it as a line and continue.
+
 ## Step 11 — Stop Storybook and queue the notification
 
 ⚡ **One `Bash` call for both.** Neither depends on the other, and the notification is a single `<notify>` call
@@ -442,7 +470,7 @@ The script discovers Storybook processes on the ports in `storybook.ports` (it d
 
 The story is wrapped, so the Storybook server(s) it was verified against are dead weight. Worse than idle: one survives into the *next* story's session holding port 4400, where a server still serving the previous branch's tree renders a story that looks fine and proves nothing.
 
-**Notification body format is `<KEY> · <task>`** — lead with the Jira key (it already encodes the board, so do NOT add the board name), and do NOT include the repo name or path; the notify tooling stamps those from the session's working directory. Epic-branch mode: `'<KEY> · story complete — committed on epic branch + Done'`. Ignore write failures.
+**Notification body format is `<KEY> · <task>`** — lead with the Jira key (it already encodes the board, so do NOT add the board name), and do NOT include the repo name or path; the notify tooling stamps those from the session's working directory. Epic-branch mode: `'<KEY> · story complete — committed on epic branch + Done'`. Direct mode: `'<KEY> · story complete — merged to <git.mainBranch> + Done'`. Ignore write failures.
 
 > The notification format is shared across `/giga-workflow:epic-story-complete`, `/giga-workflow:epic-next` and `/notify`. If you change it, update all of them together.
 
@@ -453,12 +481,14 @@ The story is wrapped, so the Storybook server(s) it was verified against are dea
 This is the skill's only prose output. Print it once, then stop.
 
 ```
-✓ Story <KEY> <ready for review | committed on the epic branch>
+✓ Story <KEY> <ready for review | committed on the epic branch | merged to <git.mainBranch>>
 Commit:   <short-sha> — <subject>
 Branch:   <current-branch> (pushed ✓)          <PR mode>
 Pushed:   <config.epicBranch> ✓                 <epic-branch mode>
+Pushed:   <git.mainBranch> ✓ (fast-forward)     <direct mode>
 PR:       #<N> — <PR URL>                       <PR mode>
 Ticket:   <KEY> → <In Review | Done>
+Cleanup:  <branch> deleted (local) · wave plan → Shipped · epic <→ Done | N children open>   <direct mode>
 Comment:  posted ✓ | skipped
 Outcome:  <board>/<KEY>.md § Outcome ✓ (<N> pin(s)) | nothing pinned
 Storybook: <the script's own output lines>
@@ -480,14 +510,18 @@ Next:
   <Epic-branch mode:>
   • Story is committed on <config.epicBranch> + Done — nothing to merge per story.
   • When the whole epic is complete, open ONE PR (<config.epicBranch> → <git.mainBranch>); after it merges run /giga-workflow:post-merge-cleanup <config.epicBranch>.
-  <both:>
+  <Direct mode:>
+  • Story is merged on <git.mainBranch> + Done — no PR to review or merge.
+  <every mode:>
   • To start the next story in the epic: /giga-workflow:epic-next <board>
 ```
+
+When the chained cleanup closed the epic (direct mode), its `<epicCloseSkill> closed` block (`Epic order` / `Plan next`) and `Review` line end the report, verbatim.
 
 ---
 
 ## Notes
 
-- **PR mode:** this skill is the **per-story** wrap-up to In Review; the merge and the wrap-up to Done are `/giga-workflow:epic-merge-pr`, which chains `/giga-workflow:post-merge-cleanup` itself — so point the user at `/giga-workflow:epic-merge-pr`, not at the cleanup skill directly, and do so however they reviewed (it is idempotent on a PR already merged in the GitHub UI). `/giga-workflow:epic-story-ship` is this skill + `/giga-workflow:epic-merge-pr --yes` as one pass; its amendments to these steps live in its own SKILL.md, not here. **Epic-branch mode:** this skill takes the story all the way to **Done**; `/giga-workflow:epic-merge-pr` refuses these boards, and `/giga-workflow:post-merge-cleanup` runs once per epic on the final `epicBranch → <git.mainBranch>` PR.
+- **PR mode:** this skill is the **per-story** wrap-up to In Review; the merge and the wrap-up to Done are `/giga-workflow:epic-merge-pr`, which chains `/giga-workflow:post-merge-cleanup` itself — so point the user at `/giga-workflow:epic-merge-pr`, not at the cleanup skill directly, and do so however they reviewed (it is idempotent on a PR already merged in the GitHub UI). `/giga-workflow:epic-story-ship` is this skill + `/giga-workflow:epic-merge-pr --yes` as one pass; its amendments to these steps live in its own SKILL.md, not here. **Epic-branch mode:** this skill takes the story all the way to **Done**; `/giga-workflow:epic-merge-pr` refuses these boards, and `/giga-workflow:post-merge-cleanup` runs once per epic on the final `epicBranch → <git.mainBranch>` PR. **Direct mode:** this skill takes the story onto `<git.mainBranch>` and to **Done**, then chains `/giga-workflow:post-merge-cleanup` itself (Step 10.5); `/giga-workflow:epic-merge-pr` refuses these boards, and `/giga-workflow:epic-story-ship` runs this skill unchanged on them.
 - Commit-message format is intentionally aligned with `commit-commands:commit` and the existing repo history so `git log --oneline` stays scannable.
-- Every failure mode is handled at the step that can hit it (Step 5 for build/hook/push/PR, Step 6 for transitions, Step 8 for the comment, Step 11 for Storybook). The rule they share: once the commit has landed, nothing downstream rolls it back — report the failure and continue.
+- Every failure mode is handled at the step that can hit it (Step 5 for build/hook/rebase/push/PR, Step 6 for transitions, Step 8 for the comment, Step 10.5 for the direct-mode cleanup, Step 11 for Storybook). The rule they share: once the commit has landed, nothing downstream rolls it back — report the failure and continue.

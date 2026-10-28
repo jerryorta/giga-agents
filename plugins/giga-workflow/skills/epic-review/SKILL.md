@@ -11,7 +11,7 @@ Each story in an epic was reviewed on its own. This review asks what only the fi
 
 ## Project config
 
-Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow` (plus the top-level `ideas` key every plugin shares). Read it once at the start. A missing file or field takes the fallback below, never a guess.
+Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow` (plus the top-level `ideas` and `ux` keys that every plugin shares). Read it once at the start. A missing file or field takes the fallback below, never a guess.
 
 | Field | Used for | When absent |
 | --- | --- | --- |
@@ -21,9 +21,9 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `ideas.policy` (top level) | the § Entry threshold and § Check for a match first every entry passes | check open tickets for a match; keep only entries with observed evidence |
 | `ideas.board` (top level) | the Idea Board the entries are written to (Steps 2, 4, 5, 6) | no board: skip Step 2 and the `ArtifactData` writes; findings and ideas stay in the report and the plan file for the owner |
 | `docs.usage[]` | where the shipped features' events and the usage read are documented (Step 3) | find events from the code alone |
-| `ux.devServerSkill` | the skill that runs the app for the UX lens | use the URL the dispatcher gave; with none, the app cannot be run |
+| `ux.devServerSkill` (top level) | the skill that runs the app for the UX lens | use the URL the dispatcher gave; with none, the app cannot be run |
 | `epicCloseSkill` | the epic-close block that names the next epic (Step 6) | write `/giga-workflow:epic-plan <next epic>` |
-| `ux.brandVoice.guides[]` | the voice guide handed to the UX lens | pass `none yet` |
+| `ux.brandVoice.guides[]` (top level) | the voice guide handed to the UX lens | pass `none yet` |
 
 ## Step 1 — Resolve the epic
 

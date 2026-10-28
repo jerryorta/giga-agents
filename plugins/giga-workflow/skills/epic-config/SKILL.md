@@ -12,7 +12,7 @@ View or update an `/giga-workflow:epic-next` board config (`epic.<board>.json`).
 
 ## Project config
 
-Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow` (plus the top-level `ideas` key every plugin shares). Read it once at the start. A missing file or field takes the fallback below, never a guess.
+Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow`. Read it once at the start. A missing file or field takes the fallback below, never a guess.
 
 | Field | Used for | When absent |
 | --- | --- | --- |
@@ -67,7 +67,7 @@ epicEvolutionRules <count> board addenda, or "(canonical only)" when [] / "(opte
 ─────────────────────────────────────────────────────
 ```
 
-> **Legacy fields silently ignored:** `mode`, `phaseNote`. Drop them on the next edit; do not display. `epicBranch` is live: it is the integration branch of a `mergeMode: "epic-branch"` board.
+> **Legacy fields silently ignored:** `mode`, `phaseNote`. Drop them on the next edit; do not display. `mergeMode` is `"pr"` (the default when absent), `"epic-branch"` or `"direct"`. `epicBranch` is live only on a `mergeMode: "epic-branch"` board, where it is the integration branch.
 
 For `routingFiles` and `conventions`, if the count > 0, list the values indented below the row.
 For `designReferences`, if set, list each key and its value indented below.

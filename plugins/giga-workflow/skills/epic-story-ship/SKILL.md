@@ -27,7 +27,7 @@ The three constituent skills are the procedure. **This file carries only the com
 
 ## Project config
 
-Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow` (plus the top-level `ideas` key every plugin shares). Read it once at the start. A missing file or field takes the fallback below, never a guess.
+Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow`. Read it once at the start. A missing file or field takes the fallback below, never a guess.
 
 | Field | Used for | When absent |
 | --- | --- | --- |
@@ -61,6 +61,8 @@ Refuse and stop when:
 - `--no-push` was passed — see Usage.
 
 **Epic-branch boards** (`config.mergeMode === "epic-branch"`) have no per-story PR, and `/giga-workflow:epic-merge-pr` refuses them. On such a board this skill **is** `/giga-workflow:epic-story-complete`: run it unchanged (its own gate, its own report — the story reaches Done on the epic branch there) and add one line to the report saying the merge leg did not apply. Do not invoke `/giga-workflow:epic-merge-pr`.
+
+**Direct boards** (`config.mergeMode === "direct"`) have no PR either, and `/giga-workflow:epic-merge-pr` refuses them too. There this skill also **is** `/giga-workflow:epic-story-complete`, run unchanged: its own merge fast-forwards `<git.mainBranch>` to the story and pushes it, so the story still reaches `<git.mainBranch>` and Done, and it chains `/giga-workflow:post-merge-cleanup` itself. Add one line to the report saying the merge leg did not apply. Do not invoke `/giga-workflow:epic-merge-pr`.
 
 ---
 
@@ -225,6 +227,6 @@ Effort:    <effort> — run `/effort <effort>` before /giga-workflow:epic-next
 
 ## Notes
 
-- **PR-mode boards only, by design.** `/giga-workflow:epic-merge-pr` refuses epic-branch boards; on those this skill degrades to `/giga-workflow:epic-story-complete`, which already takes the story to Done on the epic branch.
+- **PR-mode boards only, by design.** `/giga-workflow:epic-merge-pr` refuses epic-branch and direct boards; on those this skill degrades to `/giga-workflow:epic-story-complete`, which already takes the story to Done on the epic branch, or onto `<git.mainBranch>` on a direct board.
 - **`/giga-workflow:epic-loop`'s story agent runs the same chain** (`/giga-workflow:epic-story-complete --yes` → `/giga-workflow:epic-merge-pr --yes`); its autonomy contract owns that wording. This skill is the interactive equivalent — one gate for a human, then the same end state.
 - **Canonical notification behavior** (per-repo handoff file queued by `<notify>`, keyed by the session's git toplevel so sessions in sibling clones never take each other's message; `<KEY> · <task>` body, title + subtitle auto-stamped by the global Stop hook) is shared with `/giga-workflow:epic-story-complete`, `/giga-workflow:epic-next`, and `/notify`. If you change the format, update all of them together.

@@ -31,7 +31,7 @@ Merge a finished story's pull request and hand off to cleanup: resolve the PR, v
 
 ## Project config
 
-Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow` (plus the top-level `ideas` key every plugin shares). Read it once at the start. A missing file or field takes the fallback below, never a guess.
+Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow`. Read it once at the start. A missing file or field takes the fallback below, never a guess.
 
 | Field | Used for | When absent |
 | --- | --- | --- |
@@ -87,7 +87,7 @@ Resolve in this order and stop at the first hit:
    ```
 4. **Conversation context** — the PR number `/giga-workflow:epic-story-complete` just reported.
 
-If nothing resolves, report which branch was searched and stop. Do not guess a PR number.
+If nothing resolves, run Step 1's direct-mode guard on the branch searched (a direct-mode board never has a PR), then report which branch was searched and stop. Do not guess a PR number.
 
 ## Step 1 — Board guard
 
@@ -104,6 +104,8 @@ gh pr create --base <git.mainBranch> --head <config.epicBranch> --title "<epic k
 # after it merges:
 /giga-workflow:post-merge-cleanup <config.epicBranch>
 ```
+
+**If `config.mergeMode === "direct"`, stop.** Stories on those boards merge at `/giga-workflow:epic-story-complete`, which fast-forwards `<git.mainBranch>` to the story branch and pushes it, so there is no PR to merge. If the current branch is an unmerged story branch with commits, point at `/giga-workflow:epic-story-complete`.
 
 A board that cannot be resolved is not fatal — continue without `config`; only `--build` needs it.
 

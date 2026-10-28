@@ -26,6 +26,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `jira.createStatus` | the status every created story, the epic and kept Backlog stories are in, and the status the `/giga-workflow:epic-next` JQL reads | `To Do` |
 | `git.mainBranch` | the base branch an epic PR lands on | `main` |
 | `git.branchPrefix` | the prefix of the epic integration branch | `feat/` |
+| `boardTemplate` | the path, from the repo root, of a starter board JSON that Step 2 seeds a new board from when no `epic.*.json` matches | a new board starts from the Step 12 skeleton |
 | `ux.brandVoice.guides[]` (top level `ux`) | the voice guide for the app the red team and domain expert read | pass "none yet" |
 | `planning.dependencySignals[]` | the backend and infrastructure phrases that count as dependency-driven signals in Step 6.5a | only the "depends on / blocked by / prerequisite" links and foundation summaries count |
 | `planning.backendGlobs[]` | the backend paths that count as dependency-driven signals (Step 6.5a) and mark the backend layer (Step 7.5) | judge the backend layer from the story's description |
@@ -43,16 +44,19 @@ Read `$ARGUMENTS`. Extract the epic key (e.g., `ABC-123`). Parse the **key prefi
 
 **Optional directives in the args:**
 - **`using the key <board>`** (or `--board <board>`) — override the auto-resolved board name with `<board>` (e.g. `using the key payments` → board `payments`). Use this to give an epic its own board instead of overwriting an existing same-prefix board's config.
-- **`epic-branch`** (or `--epic-branch` / `epic`; `worktree` accepted as a back-compat alias) — set `mergeMode = "epic-branch"` for this board: every story is committed directly onto a shared epic branch (no per-story PRs); the epic lands on `<git.mainBranch>` via one PR at the end. Absent → `mergeMode` carries forward from the base config, else defaults to `"pr"` (the per-story-PR "git flow"). Save `mergeModeArg` = `"epic-branch" | null`.
+- **`epic-branch`** (or `--epic-branch` / `epic`; `worktree` accepted as a back-compat alias) — set `mergeMode = "epic-branch"` for this board: every story is committed directly onto a shared epic branch (no per-story PRs); the epic lands on `<git.mainBranch>` via one PR at the end.
+- **`direct`** (or `--direct`) — set `mergeMode = "direct"` for this board: every story gets its own branch, and `/giga-workflow:epic-story-complete` fast-forwards `<git.mainBranch>` to it and pushes (no PRs), so stories land on `<git.mainBranch>` one by one.
+
+Neither directive → `mergeMode` resolves in Step 10 (base config, then the board template, else `"pr"`, the per-story-PR "git flow"). Save `mergeModeArg` = `"epic-branch" | "direct" | null`.
 
 **Resolve board name automatically** (unless `using the key <board>` overrode it):
 
 Read all files matching `.claude/giga/epic.*.json`. For each file, read the `epicKey` field and extract its prefix. Find the file whose prefix matches the argument's prefix.
 
 - **Match found** → the board name is the `*` portion of the filename (e.g., `epic.abc.json` → `abc`). Load the entire matching config as the **base config** to carry forward unchanged fields (e.g., `app`, `libraries`, `conventions`, `designReferences`).
-- **No match** → board name = lowercase of the prefix (e.g., `XYZ` → `xyz`). A new config will be created from scratch; prompt the user after Step 9 to fill in the app/library paths.
+- **No match** → board name = lowercase of the prefix (e.g., `XYZ` → `xyz`). A new config will be created from scratch; prompt the user after Step 9 to fill in the app/library paths. When `boardTemplate` names a file that exists, seed the new config from it instead: load that file as the **base config**, drop every key that starts with `_`, and hold their text as `templateNotes` for the Step 9 gate (`baseFromTemplate = true`). Step 12 still writes `name`, `epicKey`, `jql`, `completionMessage` and the other epic-specific fields from this epic.
 
-Save: `epicKey`, `boardName`, `baseConfig` (may be null), `mergeModeArg`.
+Save: `epicKey`, `boardName`, `baseConfig` (may be null), `baseFromTemplate`, `templateNotes`, `mergeModeArg`.
 
 ## Step 3 — Plans-repo access (board nav + content — NOT the MCP)
 
@@ -73,6 +77,7 @@ Before this skill overwrites `epic.<boardName>.json`, check whether the **previo
 
 **Skip this step entirely if:**
 - `baseConfig` is null (new board), OR
+- `baseFromTemplate` (a new board seeded from the board template), OR
 - `baseConfig.epicKey === epicKey` (re-planning the same epic, not switching to a new one)
 
 Otherwise:
@@ -320,9 +325,13 @@ Challenge (Step 6.7) — Idea Board: <ideas.board>   (omit the block when ideas.
   Declined before, not re-proposed: <n>
   Last epic review: <present | missing — recommend /giga-workflow:epic-review <KEY> first | n/a>
 
-Config file: .claude/giga/epic.<boardName>.json (will be <created | overwritten>)
-Merge mode: <pr | epic-branch>  <if epic-branch: → epic branch <epicBranch>>
-(PR mode: per-story <git.branchPrefix> branches derived at /giga-workflow:epic-next time. Epic-branch mode: every story commits onto <epicBranch>; one epic PR at the end.)
+Config file: .claude/giga/epic.<boardName>.json (will be <created | overwritten>; always created when seeded from <boardTemplate>)
+<If baseFromTemplate:>
+Seeded from <boardTemplate> — adjust the workspace shape below if this epic differs:
+  <each templateNotes entry, its key and text>
+</If>
+Merge mode: <pr | epic-branch | direct>  <if epic-branch: → epic branch <epicBranch>>
+(PR mode: per-story <git.branchPrefix> branches derived at /giga-workflow:epic-next time. Epic-branch mode: every story commits onto <epicBranch>; one epic PR at the end. Direct mode: per-story <git.branchPrefix> branches, each fast-forwarded into <git.mainBranch> and pushed by /giga-workflow:epic-story-complete; no PRs.)
 
 Description rewrite policy options:
   [A] Replace ONLY the ## Wave Plan section; preserve all other sections verbatim
@@ -353,7 +362,7 @@ Proceed to Step 10 ONLY when all of them are answered. If the user amends the wa
 
 ## Step 10 — Derive config values
 
-> **Merge mode + epic branch.** Set `mergeMode`: the explicit `epic-branch` directive from Step 2 (`mergeModeArg`) wins; else carry forward `baseConfig.mergeMode`; else default `"pr"`. When `mergeMode === "epic-branch"`, also derive `epicBranch` — use the current git branch if it already looks like this epic's integration branch (`git rev-parse --abbrev-ref HEAD`, e.g. `<git.branchPrefix>abc-123-short-slug`), else `<git.branchPrefix><epicKey-lower>-<slug-from-epic-summary>` (same slugging as `/giga-workflow:epic-next`). In PR mode, per-story `<git.branchPrefix>` branches are still derived at `/giga-workflow:epic-next` time — no shared branch needed.
+> **Merge mode + epic branch.** Set `mergeMode`: the explicit `epic-branch` or `direct` directive from Step 2 (`mergeModeArg`) wins; else carry forward `baseConfig.mergeMode`; else the board template's `mergeMode` (`boardTemplate`); else default `"pr"`. When `mergeMode === "epic-branch"`, also derive `epicBranch` — use the current git branch if it already looks like this epic's integration branch (`git rev-parse --abbrev-ref HEAD`, e.g. `<git.branchPrefix>abc-123-short-slug`), else `<git.branchPrefix><epicKey-lower>-<slug-from-epic-summary>` (same slugging as `/giga-workflow:epic-next`). In PR and direct modes, per-story `<git.branchPrefix>` branches are still derived at `/giga-workflow:epic-next` time — no shared branch needed, and `epicBranch` is `null`.
 
 **JQL:**
 ```
@@ -471,7 +480,7 @@ Write to the chosen path:
   "groupLabel": "Wave",
   "completionMessage": "All <epicKey> stories are complete!",
   "hybridMode": <from baseConfig.hybridMode or false — see notes above; "conditional" where stories need /giga-workflow:epic-cross-actor-test>,
-  "mergeMode": "<from baseConfig.mergeMode or 'pr' — 'epic-branch' for boards where every story commits onto a shared epic branch>",
+  "mergeMode": "<from Step 10: the directive, baseConfig.mergeMode, the template's, or 'pr' — 'epic-branch' for boards where every story commits onto a shared epic branch; 'direct' for boards whose stories each fast-forward into <git.mainBranch> with no PR>",
   "epicBranch": <"<git.branchPrefix><epic-lower>-<slug>" when mergeMode is "epic-branch" (Step 10); null otherwise>,
   "commitScope": "<from baseConfig or derived from boardName>",
   "buildCommand": "<from baseConfig or null — e.g. 'npm run b.app.<domain>'. Run by /giga-workflow:jira Phase 6 to catch type/barrel drift. Set to null only if there is no buildable app.>",
@@ -498,7 +507,7 @@ copies of the same 1.6KB, written by this step on every re-plan. They drifted: o
 discovery rule and forked a weaker epic-description rule. Restating them here is what regenerates
 that drift, which is why this step no longer does it.
 
-If `baseConfig` was null (new board), output a warning listing the fields that need to be filled in manually: `app`, `libraries`, `routingFiles`, `conventions`, `buildCommand`.
+If `baseConfig` was null (new board), output a warning listing the fields that need to be filled in manually: `app`, `libraries`, `routingFiles`, `conventions`, `buildCommand`. When the board template seeded them (`baseFromTemplate`), list the same fields as `seeded from <boardTemplate> — confirm` instead.
 
 ## Step 13 — Summary
 

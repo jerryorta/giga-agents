@@ -1,9 +1,9 @@
 ---
 name: epic-next
-description: "Generic epic story orchestrator. Picks the next unstarted story from any configured epic and starts work on it — one story per session — on a **per-story feature branch** (PR mode) or **directly on the shared epic branch** (epic-branch mode)."
+description: "Generic epic story orchestrator. Picks the next unstarted story from any configured epic and starts work on it — one story per session — on a **per-story feature branch** (PR and direct modes) or **directly on the shared epic branch** (epic-branch mode)."
 ---
 
-Generic epic story orchestrator. Picks the next unstarted story from any configured epic and starts work on it — one story per session — on a **per-story feature branch** (PR mode) or **directly on the shared epic branch** (epic-branch mode).
+Generic epic story orchestrator. Picks the next unstarted story from any configured epic and starts work on it — one story per session — on a **per-story feature branch** (PR and direct modes) or **directly on the shared epic branch** (epic-branch mode).
 
 **Usage:**
 - `/giga-workflow:epic-next <board>` — the next unstarted story
@@ -26,6 +26,7 @@ Explicit batch points are marked ⚡ below.
 **Branch model — set by `config.mergeMode`:**
 - **`"pr"` (default / field absent):** every story gets its own `<git.branchPrefix><key>-<slug>` branch cut from `origin/<git.mainBranch>`. After `/giga-workflow:jira` finishes its in-conversation phases, hand off to `/giga-workflow:epic-story-complete` to commit + push + open the PR + transition the ticket to In Review. The next story starts fresh from a freshly-pulled `<git.mainBranch>`. No shared long-lived epic branches.
 - **`"epic-branch"`:** every story is implemented in the main checkout **directly on the shared `config.epicBranch`** and committed there. `/giga-workflow:epic-story-complete` pushes the epic branch and transitions the ticket to Done (no per-story PR). The whole epic lands on `<git.mainBranch>` via **one PR at the end**. Requires `config.epicBranch`.
+- **`"direct"`:** every story gets the same per-story `<git.branchPrefix><key>-<slug>` branch as PR mode, cut from `origin/<git.mainBranch>`, and no PR. `/giga-workflow:epic-story-complete` commits on it, fast-forwards `<git.mainBranch>` to it, pushes `<git.mainBranch>`, transitions the ticket to Done and chains `/giga-workflow:post-merge-cleanup`. Each story lands on `<git.mainBranch>` on its own, for repos that deploy on every push to it.
 
 **Available boards:** one per `.claude/giga/epic.<board>.json`. List them from the files (board name, `epicKey`, `name`), never from memory: boards are repointed at each new epic, so any copied list goes stale.
 
@@ -40,7 +41,7 @@ Explicit batch points are marked ⚡ below.
 
 ## Project config
 
-Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow` (plus the top-level `ideas` key every plugin shares). Read it once at the start. A missing file or field takes the fallback below, never a guess.
+Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow`. Read it once at the start. A missing file or field takes the fallback below, never a guess.
 
 | Field | Used for | When absent |
 | --- | --- | --- |
@@ -50,7 +51,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `jira.credentialsFile` | where the plans script authenticates from | omit the sentence naming it |
 | `git.mainBranch` | the base branch stories are cut from and merged into | `main` |
 | `git.branchPrefix` | the per-story branch prefix | `feat/` |
-| `commit.format` | the commit subject `/giga-workflow:epic-story-complete` writes | `<type>(<scope>): <KEY> <summary>` |
+| `commit.format` | the commit subject `/giga-workflow:epic-story-complete` writes | `<type>(<scope>): <KEY> <subject>` |
 | `memoryDir` | the personal memory directory holding each board's `domainMemoryIndex` | skip the domain-memory read |
 | `epicCloseSkill` | the skill invoked when the epic's last story is Done | skip the epic-close hand-off and print `config.completionMessage` only |
 | `notify` | the desktop-notification command queued at the end | no desktop notification |
@@ -82,11 +83,11 @@ Each `epic.<board>.json` file defines:
 | `designReferences` | object \| null | Design system pointers (`boardsIndex`, `spec`, `agentsFile`, `tokens`) |
 | `epicEvolutionRules` | string[] \| null | Board-specific **addenda** to the four canonical evolution rules, which live in `/giga-workflow:epic-evolution-audit` and bind every board. `[]` (the common case) = canonical only; `null` = this board opted out of evolution propagation entirely. Surface to `/giga-workflow:jira` for inclusion in the Phase 7 test plan when a shift gets surfaced. |
 | `domainMemoryIndex` | string \| null | Filename of this board's domain memory index in the personal memory dir (e.g. `payments-index.md`). Read in Step 0 so domain-specific Project/Reference memories load without bloating the always-on `MEMORY.md`. Omit / `null` to skip. |
-| `mergeMode` | `"pr"` \| `"epic-branch"` \| undefined | How stories integrate. `"pr"` / absent (default) = per-story `<git.branchPrefix>` branch → PR → `<git.mainBranch>`. `"epic-branch"` = every story is committed directly onto the shared `epicBranch` (no per-story PR); the epic lands on `<git.mainBranch>` via one PR at the end. |
+| `mergeMode` | `"pr"` \| `"epic-branch"` \| `"direct"` \| undefined | How stories integrate. `"pr"` / absent (default) = per-story `<git.branchPrefix>` branch → PR → `<git.mainBranch>`. `"epic-branch"` = every story is committed directly onto the shared `epicBranch` (no per-story PR); the epic lands on `<git.mainBranch>` via one PR at the end. `"direct"` = per-story `<git.branchPrefix>` branch, fast-forwarded into `<git.mainBranch>` and pushed by `/giga-workflow:epic-story-complete` (no PR). |
 | `epicBranch` | string \| null | **Epic-branch mode only (required).** The long-lived integration branch every story commits onto (e.g. `feat/abc-123-short-slug`). |
 | `loop` | object \| undefined | Consumed by the `/giga-workflow:epic-loop` skill (unattended in-session orchestrator); has NO effect on `/giga-workflow:epic-next` itself. Holds `storyModel` (default `opus`), `triage` + `triageModel`, `decisionResearchModel`, `designSkills[]` + `architectureSkills[]` (the authorities `/giga-workflow:epic-loop`'s decision-resolution ladder consults before falling back to a precedent search), `evolutionAudit`, `maxConsecutiveFailures`, and `browserVerification` (default `false`; `true` = story agents check UI changes in Storybook or the running app before shipping, on one browser connection made at run start). Omit to run `/giga-workflow:epic-loop` on this board with its defaults. |
 
-> **Field history:** `mode` (the old orchestrated shared-branch driver, retired 2026-05-17) remains removed/ignored. `epicBranch` was removed at the same time but is **revived** as the integration branch for `mergeMode:"epic-branch"` boards (stories commit onto it directly; it is not the old orchestrated model).
+> `mode` and `phaseNote` are ignored. `epicBranch` is the integration branch of a `mergeMode:"epic-branch"` board; every story commits onto it directly.
 
 ---
 
@@ -232,14 +233,14 @@ Then call `ExitPlanMode`. Implementation proceeds only after the user confirms t
 
 This step is the unit of work, and it runs exactly once.
 
-### 9a — Create the per-story branch (PR mode) or check out the epic branch (epic-branch mode)
+### 9a — Create the per-story branch (PR and direct modes) or check out the epic branch (epic-branch mode)
 
 Derive the slug:
 - Lowercase the ticket key (`ABC-123` → `abc-123`).
 - Take the first 4–6 words of the Jira summary, lowercase, replace non-alphanumerics with `-`, collapse runs of `-`, trim leading/trailing `-`.
 - Cap total length at ~60 chars. Drop trailing words to fit.
 
-**PR mode (`config.mergeMode !== "epic-branch"`)** — cut a `<git.branchPrefix><key-lower>-<slug>` branch (e.g. `feat/abc-123-short-slug`) fresh from `origin/<git.mainBranch>`:
+**PR and direct modes (`config.mergeMode !== "epic-branch"`)** — cut a `<git.branchPrefix><key-lower>-<slug>` branch (e.g. `feat/abc-123-short-slug`) fresh from `origin/<git.mainBranch>`:
 
 ⚡ One `Bash` call, not three:
 
@@ -294,11 +295,12 @@ After /giga-workflow:jira finishes and the user has reviewed the diff, invoke `/
 `/giga-workflow:epic-story-complete` will commit the unstaged changes with a cz-conventional-changelog subject (`commit.format`), then, per `config.mergeMode`:
 - **PR mode:** push the branch with `-u origin`, open the PR via `gh pr create` with the test plan in the body, and transition the ticket to **In Review** (`/giga-workflow:epic-merge-pr` merges it and chains `/giga-workflow:post-merge-cleanup` → Done).
 - **Epic-branch mode:** commit onto `config.epicBranch`, push it (`git push origin <config.epicBranch>`), and transition the ticket to **Done** (no per-story PR — the epic lands on `<git.mainBranch>` via one PR at the end).
+- **Direct mode:** commit on the story branch, rebase it onto `origin/<git.mainBranch>` if that moved, fast-forward `<git.mainBranch>` to it and push `<git.mainBranch>` (no PR; the story branch is never pushed), transition the ticket to **Done**, and chain `/giga-workflow:post-merge-cleanup`, which deletes the local branch and moves the story out of its wave.
 
 ### 9d — Stop
 
 Stop here. The user reviews the PR — on github.com or via `gh pr view` — and then runs
-`/giga-workflow:epic-merge-pr <N>`, which squash-merges it, verifies it reached `MERGED`, repairs a stale local
+`/giga-workflow:epic-merge-pr <N>`, which merges it (`git.mergeMethod`), verifies it reached `MERGED`, repairs a stale local
 `<git.mainBranch>`, and chains `/giga-workflow:post-merge-cleanup` → Done. **Point them at `/giga-workflow:epic-merge-pr`, not at
 `/giga-workflow:post-merge-cleanup`, whichever way they reviewed:** it is idempotent, so a PR they already merged
 in the GitHub UI reads as `MERGED` and it skips straight to cleanup.
@@ -314,10 +316,19 @@ Next on the board: <next-KEY> — <next-summary>
 Run /giga-workflow:epic-next <board> in a new session (or another clone) to start it.
 ```
 
-Print `<done> of <total> stories complete` with the shipped line, recomputed fresh as in Step 7 (epic-branch mode: after the ticket reaches Done; PR mode: the story is counted once `/giga-workflow:epic-merge-pr` moves it to Done).
+**Direct mode:** the story is already merged on `<git.mainBranch>` and Done, so there is no PR to review
+and nothing to merge; do not point at `/giga-workflow:epic-merge-pr`. Print instead:
+
+```
+<KEY> merged to <git.mainBranch> — <short-sha>
+Next on the board: <next-KEY> — <next-summary>
+Run /giga-workflow:epic-next <board> in a new session (or another clone) to start it.
+```
+
+Print `<done> of <total> stories complete` with the shipped line, recomputed fresh as in Step 7 (epic-branch and direct modes: after the ticket reaches Done; PR mode: the story is counted once `/giga-workflow:epic-merge-pr` moves it to Done).
 
 Getting `next-KEY` costs nothing extra — it is already in the Step 6 board results.
 
-> **Desktop notification** (skip when `notify` is absent). `/giga-workflow:epic-next` is always interactive, so this path is safe to ping. The delegated `/giga-workflow:epic-story-complete` (Step 9c) already queued a completion line with `<notify>` at its own Step 11; overwrite it here so the global Stop hook fires one persistent ping at turn end: `<notify> '<KEY> · single story complete — PR #<N> ready for review'`. Use the real KEY/PR values. **Body format is `<KEY> · <task>` — lead with the Jira key (it already encodes the board, so do NOT add the board name). Do NOT include the repo name or path either; the Stop hook auto-stamps those as the notification title + subtitle from the session's cwd.** One ping only (same session, file consumed once). Ignore write failures.
+> **Desktop notification** (skip when `notify` is absent). `/giga-workflow:epic-next` is always interactive, so this path is safe to ping. The delegated `/giga-workflow:epic-story-complete` (Step 9c) already queued a completion line with `<notify>` at its own Step 11; overwrite it here so the global Stop hook fires one persistent ping at turn end: `<notify> '<KEY> · single story complete — PR #<N> ready for review'` (direct mode: `'<KEY> · single story complete — merged to <git.mainBranch> + Done'`). Use the real KEY/PR values. **Body format is `<KEY> · <task>` — lead with the Jira key (it already encodes the board, so do NOT add the board name). Do NOT include the repo name or path either; the Stop hook auto-stamps those as the notification title + subtitle from the session's cwd.** One ping only (same session, file consumed once). Ignore write failures.
 >
 > **Canonical notification behavior** (per-repo handoff file queued by `<notify>`, keyed by the session's git toplevel so sessions in sibling clones never take each other's message; `<KEY> · <task>` body, `CLAUDE · <status>` title + `~`-repo-path subtitle auto-stamped by the global Stop hook in `~/.claude/settings.json`) is shared across `/giga-workflow:epic-story-complete`, `/giga-workflow:epic-next`, and `/notify`, and documented in the notify memory. If you change the format, update all of them together.

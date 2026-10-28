@@ -38,7 +38,7 @@ Orchestrates the **act → wait → switch → verify** flow:
 ## When NOT to use
 
 - Single-persona flows — use direct browser MCP calls
-- Component-isolation tests — use `/ui-storybook`
+- Component-isolation tests — use Storybook, launched through the `giga-workflow:dev-server` skill
 - Backend-only verification — only when the board's config exposes an `e2eHook` is there a Firestore-direct rung to call (see Phase 5)
 
 ---
