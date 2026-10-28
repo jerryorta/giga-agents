@@ -1,16 +1,8 @@
 #!/usr/bin/env python3
 """Publish skills and agents from the source monorepo into this marketplace's plugins.
 
-The monorepo's `.claude/` is the source of truth; this script copies the skills and agents
-named in `sync.json` verbatim, then applies three rules:
-
-- Plugin components are namespaced (`giga-ux:ux-architect`), so every mention of a skill or agent
-  any plugin here ships — backticked (`ux-design`), invoked (`/epic-next`), or preloaded in an
-  agent's `skills:` frontmatter — gets that plugin's prefix, across plugins.
-- Nothing is written if any copied file matches a `forbidden` pattern: this repo is public.
-- Nothing is written if a skill reads a `${CLAUDE_SKILL_DIR}/../<skill>/` file its plugin lacks.
-
 Usage: scripts/sync_from_monorepo.py [--source PATH] [--dry-run]
+The namespacing, leak and cross-plugin rules: README § How this repo is built.
 """
 
 import argparse
