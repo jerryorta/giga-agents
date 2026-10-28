@@ -5,13 +5,18 @@
     "url": "https://github.com/jerryorta"
   },
   "metadata": {
-    "description": "Claude Code plugins for product and UX workflows, published from a production Nx monorepo."
+    "description": "Claude Code plugins for product, UX and delivery workflows, published from a production Nx monorepo."
   },
   "plugins": [
     {
       "name": "giga-ux",
       "source": "./plugins/giga-ux",
       "description": "UX architecture and review: wireframe a feature before its visual design, review it in the running app after it is built, with blind first-click and expectation tests."
+    },
+    {
+      "name": "giga-workflow",
+      "source": "./plugins/giga-workflow",
+      "description": "Jira epic workflow: plan an epic into waves, take one story at a time from ticket to merged PR, or run a whole board unattended — with plan files, a refactor-when-touched gate, UX review and cross-actor testing."
     }
   ]
 }

@@ -4,9 +4,9 @@
 The monorepo's `.claude/` is the source of truth; this script copies the skills and agents
 named in `sync.json` verbatim, then makes two mechanical changes:
 
-- Plugin components are namespaced (`giga-ux:ux-architect`), so every backticked mention of a
-  skill or agent the plugin ships, and every `skills:` preload in an agent's frontmatter, gets
-  the plugin prefix.
+- Plugin components are namespaced (`giga-ux:ux-architect`), so every mention of a skill or agent
+  any plugin here ships — backticked (`ux-design`), invoked (`/epic-next`), or preloaded in an
+  agent's `skills:` frontmatter — gets that plugin's prefix, across plugins.
 - Nothing is written if any copied file matches a `forbidden` pattern: this repo is public.
 
 Usage: scripts/sync_from_monorepo.py [--source PATH] [--dry-run]
@@ -23,34 +23,43 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def namespace(text: str, plugin: str, names: list[str]) -> str:
-    for name in names:
-        text = re.sub(rf"`{re.escape(name)}`", f"`{plugin}:{name}`", text)
+def owners(plugins: dict) -> dict[str, str]:
+    """Map every skill and agent name to the plugin that ships it."""
+    return {name: plugin for plugin, spec in plugins.items()
+            for name in spec.get("skills", []) + spec.get("agents", [])}
+
+
+def namespace(text: str, owner: dict[str, str]) -> str:
+    for name in sorted(owner, key=len, reverse=True):
+        full = f"{owner[name]}:{name}"
+        text = re.sub(rf"`{re.escape(name)}`", f"`{full}`", text)
+        # A path segment (`skills/jira`) or a URL is never an invocation.
+        text = re.sub(rf"(?<![\w.~/:-])/{re.escape(name)}(?![\w:-])", f"/{full}", text)
     return text
 
 
-def namespace_preloads(text: str, plugin: str, skills: list[str]) -> str:
+def namespace_preloads(text: str, owner: dict[str, str]) -> str:
     match = re.match(r"---\n(.*?)\n---\n", text, re.S)
     if not match:
         return text
     front = match.group(1)
-    for skill in skills:
-        front = re.sub(rf"^(\s+-\s+){re.escape(skill)}\s*$", rf"\g<1>{plugin}:{skill}", front, flags=re.M)
+    for name, plugin in owner.items():
+        front = re.sub(rf"^(\s+-\s+){re.escape(name)}\s*$", rf"\g<1>{plugin}:{name}", front, flags=re.M)
     return f"---\n{front}\n---\n" + text[match.end():]
 
 
-def build_plugin(src: Path, out: Path, plugin: str, spec: dict) -> None:
-    skills, agents = spec.get("skills", []), spec.get("agents", [])
-    names = skills + agents
-    for skill in skills:
+def build_plugin(src: Path, out: Path, spec: dict, owner: dict[str, str]) -> None:
+    for skill in spec.get("skills", []):
         shutil.copytree(src / ".claude" / "skills" / skill, out / "skills" / skill)
-    (out / "agents").mkdir(parents=True, exist_ok=True)
+    agents = spec.get("agents", [])
+    if agents:
+        (out / "agents").mkdir(parents=True, exist_ok=True)
     for agent in agents:
         shutil.copy2(src / ".claude" / "agents" / f"{agent}.md", out / "agents" / f"{agent}.md")
     for md in out.rglob("*.md"):
-        text = namespace(md.read_text(), plugin, names)
+        text = namespace(md.read_text(), owner)
         if md.parent.name == "agents":
-            text = namespace_preloads(text, plugin, skills)
+            text = namespace_preloads(text, owner)
         md.write_text(text)
 
 
@@ -76,10 +85,11 @@ def main() -> int:
         print(f"no .claude/ under {src}", file=sys.stderr)
         return 1
 
+    owner = owners(config["plugins"])
     with tempfile.TemporaryDirectory() as tmp:
         staged = Path(tmp)
         for plugin, spec in config["plugins"].items():
-            build_plugin(src, staged / plugin, plugin, spec)
+            build_plugin(src, staged / plugin, spec, owner)
 
         problems = leaks(staged, config.get("forbidden", []))
         if problems:

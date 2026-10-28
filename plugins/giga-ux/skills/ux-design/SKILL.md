@@ -1,6 +1,6 @@
 ---
 name: ux-design
-description: Use before a feature, page or user flow gets its visual design (to wireframe its structure, place it in the app and name things), after it is built and before calling it done (to review it in the running app), and whenever someone asks how users move through an existing app or one of its sections ("can a user get to their notes from the dashboard", "how does a user reach the notes inside a course", "can a user find a course and take it", "is this flow intuitive", "where should this live", "does this section name make sense"). Also runs the whole-app review after an epic closes (`/epic-review`). Covers information architecture, navigation, labels and metaphors, every word the user reads in the brand's voice, entry points, flow, states, app-wide consistency, and what to cut. Complements frontend-design, which designs how an isolated piece looks.
+description: Use before a feature, page or user flow gets its visual design (to wireframe its structure, place it in the app and name things), after it is built and before calling it done (to review it in the running app), and whenever someone asks how users move through an existing app or one of its sections ("can a user get to their notes from the dashboard", "how does a user reach the notes inside a course", "can a user find a course and take it", "is this flow intuitive", "where should this live", "does this section name make sense"). Also runs the whole-app review after an epic closes (`/giga-workflow:epic-review`). Covers information architecture, navigation, labels and metaphors, every word the user reads in the brand's voice, entry points, flow, states, app-wide consistency, and what to cut. Complements frontend-design, which designs how an isolated piece looks.
 ---
 
 # UX Design & Review
@@ -35,7 +35,7 @@ UX work bookends the visual design; it is not part of it.
 | **Before** — wireframe | `giga-ux:ux-architect` agent | UX brief + structural wireframes |
 | Visual design and build | the implementer, with `frontend-design` | the built piece |
 | **After** — in the app | `giga-ux:ux-reviewer` agent | Review report |
-| **After an epic** — the whole app | `giga-ux:ux-reviewer` agent, from `/epic-review` | Review report, whole-app scope |
+| **After an epic** — the whole app | `giga-ux:ux-reviewer` agent, from `/giga-workflow:epic-review` | Review report, whole-app scope |
 | Blind tests, for all three | `giga-ux:ux-blind-user` agents | one first click, or one expectation |
 
 You speak for the person using the app, never for the code or the schedule. That gives you authority over what the story builds (§ Authority) and a duty to ask what to remove as well as what to add; no removal is a valid answer. Everything beyond the story's own work is a recommendation: you never delete, remove, rebuild or refactor anything yourself, and neither does the revision you ask for. Ideas go to the owner through the Idea Board, under the ideas policy (§ Project config), never into a ticket.
@@ -59,7 +59,7 @@ A question about what exists ("can a user reach their notes?") is a single `giga
 
 ## Before — Frame
 
-Produce a **UX brief** — one section per heading, in this order. Start from what is already decided: read any spec, plan or design board for the piece first. The brief fills their gaps and lists each conflict as a decision for the owner; it does not re-decide them. **At most three decisions for the owner per story**, the ones that change what the user meets; settle the rest from the app's own patterns and say so in the brief. An unattended run never defaults them silently: they join one list per epic for the owner (`/jira` Phase 2.8).
+Produce a **UX brief** — one section per heading, in this order. Start from what is already decided: read any spec, plan or design board for the piece first. The brief fills their gaps and lists each conflict as a decision for the owner; it does not re-decide them. **At most three decisions for the owner per story**, the ones that change what the user meets; settle the rest from the app's own patterns and say so in the brief. An unattended run never defaults them silently: they join one list per epic for the owner (`/giga-workflow:jira` Phase 2.8).
 
 1. **Jobs.** Each task as a job in the user's words, never the target's label: *"Before the exam, I want to reread what I wrote in last week's biology lecture"*, not *"open Notes"*. Give the start point — any screen, not only the dashboard ("from inside my Biology course") — and what "done" looks like. A request that reads two ways ("take a course": enrol, or work through it) becomes one job per reading. Top jobs only, usually 2–5. Personas: **first-run** (empty account, never seen the app) and **returning** (has data, comes back weekly); add one wherever a role changes what the user sees or may do (a read-only member, an admin).
 2. **App map.** From the router config and the nav components: the nav tree with its visible labels, the hubs (dashboard, section landing pages), and where the app already handles neighbouring jobs. For a section, map its own structure too: tabs, lists, item pages, and the way back up. List every item page one level below a list or tab, with its in-app way back on each shell. A page whose only way back is the browser's goes under Predicted failures.
@@ -153,7 +153,7 @@ Against the rendered app: run it with the `devServerSkill` from § Project confi
 
 ## Epic review — the whole app
 
-After an epic closes, `/epic-review` dispatches `giga-ux:ux-reviewer` on the whole app, not one story. Run Frame steps 1 and 2 for the app's top jobs, then Review those jobs end to end, weighting the sections the epic touched. Ask what only the whole app shows:
+After an epic closes, `/giga-workflow:epic-review` dispatches `giga-ux:ux-reviewer` on the whole app, not one story. Run Frame steps 1 and 2 for the app's top jobs, then Review those jobs end to end, weighting the sections the epic touched. Ask what only the whole app shows:
 
 - **Fit.** Does each new feature sit where a user's job puts it in the app as a whole, or only where its story put it?
 - **Growth.** How many choices did the nav and the hubs gain, and does every addition still earn its place on a phone?
@@ -165,7 +165,7 @@ The report keeps the shape above. Its findings and New scope reach the Idea Boar
 
 ## Section review — one polish list
 
-`/epic-plan` may dispatch `giga-ux:ux-reviewer` on one section or page to gather its polish before stories are cut. Run Review steps 4–8 on that section's screens, with the coverage rule (every theme, every width), and return **one** list instead of the full report: the section, then each finding ranked by severity (cosmetic included) with its screen, evidence and recommendation, and any screen `owed`. `none` is a valid return. The planner writes a list that passes the § Entry threshold as one `fix` entry for the section, never one entry per finding.
+`/giga-workflow:epic-plan` may dispatch `giga-ux:ux-reviewer` on one section or page to gather its polish before stories are cut. Run Review steps 4–8 on that section's screens, with the coverage rule (every theme, every width), and return **one** list instead of the full report: the section, then each finding ranked by severity (cosmetic included) with its screen, evidence and recommendation, and any screen `owed`. `none` is a valid return. The planner writes a list that passes the § Entry threshold as one `fix` entry for the section, never one entry per finding.
 
 ## Common mistakes
 
