@@ -251,8 +251,8 @@ reviewed and confirmed at the gate; otherwise stage by explicit path list). **Ne
 pre-commit hooks must run. When `commit.hooks` is `false` no commit hook validates the message, so check the subject against the Step 3 rules yourself before committing.
 
 **Refactor commit first** (only when `commit.refactorCommitFirst` is not `false`). If the story's plan file carries a `## Refactor (in place)` list (written by
-`/giga-workflow:jira` once its 5a slices report), the chain opens with a separate `refactor(<config.commitScope>): bring
-touched files to standard (<KEY>)` commit before `git add -A` stages the feature. Two commits, one push. If
+`/giga-workflow:jira` once its 5a slices report), the chain opens with a separate `refactor(<config.commitScope>): <KEY> bring
+touched files to standard` commit before `git add -A` stages the feature. Two commits, one push. If
 the list is absent, there is one commit. **Never stage the listed paths wholesale** — the feature was built
 on top of the refactor in the same files, so `git add <paths>` would commit the feature under
 `refactor(...)`. Stage the refactor from the snapshot `/giga-workflow:jira` merged from each slice's:
@@ -412,7 +412,7 @@ Then, and only then, touch the parent epic. Write its `## Shipped` line here **o
 ⚡ This edit and the Step 10 wave-plan edit both land in the plans repo. Make **both** edits, then commit
 them together in Step 10's single `Bash` call. Do not commit the plans repo twice.
 
-## Step 10 — Act on the epic evolution items (skip if `epicEvolutionItems` is empty)
+## Step 10 — Act on the epic evolution items ((a)–(c) only when `epicEvolutionItems` is non-empty; (d) always runs)
 
 Run this for every item that survived the Step 4 gate. **This step is the work, not a printed suggestion.** A finding the user approved but nobody executed is exactly the drift the epic-evolution rules exist to prevent, and in a single-developer automated workflow there is no second pair of hands to catch it later.
 

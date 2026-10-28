@@ -211,7 +211,7 @@ epic-branch-mode **epic**, the Jira leg above already took it to Done, so go str
 
 ## Return to working branch
 
-1. **If `<original-branch>` is different from `<git.mainBranch>`** (i.e., the user was on a different working branch):
+1. **If `<original-branch>` is different from `<git.mainBranch>` and is not the branch this run deleted** (i.e., the user was on a different working branch):
    ```
    git checkout <original-branch>
    ```
