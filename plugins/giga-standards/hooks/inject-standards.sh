@@ -122,9 +122,19 @@ fi
 mark_dir="${TMPDIR:-/tmp}/claude-standards-injected/$sid/$agent"
 mkdir -p "$mark_dir" 2>/dev/null
 
+# Each standard is an item: its kind (c constraint · a anti-pattern · l lib-type · f fragment), its
+# inline text and its pointer line, both with their trailing newlines and byte sizes. Anti-patterns
+# share one pointer line, so an anti-pattern item's pointer is just its id.
+kinds=(); bodies=(); ptrs=(); ib=(); pb=(); inl=()
+# item <kind> <body> <pointer> -> appends the item.
+item() {
+  local body="$2"$'\n\n' ptr="$3"$'\n' pbytes
+  if [ "$1" = a ]; then body="$2"$'\n'; ptr="$3"; pbytes=0; else pbytes=$(nbytes "$ptr"); fi
+  kinds+=("$1"); bodies+=("$body"); ptrs+=("$ptr"); ib+=("$(nbytes "$body")"); pb+=("$pbytes")
+}
+
 # ---- GLOBAL scope (invariants + anti-patterns + artifact fragments + guides) — once per artifact ----
-sections=""; patterns=""; guides=""
-frag_paths=(); frag_bodies=()
+guides=""
 if [ -n "$artifact" ] && [ ! -e "$mark_dir/art-$artifact" ]; then
   : > "$mark_dir/art-$artifact" 2>/dev/null
   if [ -f "$CONSTRAINTS" ]; then
@@ -133,20 +143,24 @@ if [ -n "$artifact" ] && [ ! -e "$mark_dir/art-$artifact" ]; then
       sec=$(awk -v h="$h" '
         /^## / { cur = substr($0, 4); if (substr(cur, 1, length(h)) == h) { cap = 1; print; next } else if (cap) { cap = 0 } }
         cap { print }' "$CONSTRAINTS" 2>/dev/null)
-      [ -n "$sec" ] && sections="$sections$sec"$'\n\n'
+      sec_title="${sec%%$'\n'*}"
+      [ -n "$sec" ] && item c "$sec" "- ${CONSTRAINTS#$root/} § ${sec_title#'## '}"
     done <<< "$headings"
   fi
   if [ -f "$ANTIPATTERNS" ] && [ "$ids" != "[]" ]; then
-    patterns=$(jq -r --argjson ids "$ids" '
-      .patterns[] | select(.id as $x | $ids | any(. == $x))
-      | "- [\(.severity)] \(.description)" + (if .fix then " → " + .fix else "" end)' "$ANTIPATTERNS" 2>/dev/null)
+    while IFS=$'\t' read -r id line; do
+      [ -n "$line" ] && item a "$line" "$id"
+    done < <(jq -r --argjson ids "$ids" '
+      .patterns as $p
+      | reduce $ids[] as $i ([]; if any(.[]; . == $i) then . else . + [$i] end) | .[] as $i
+      | $p[] | select(.id == $i)
+      | "\(.id)\t- [\(.severity)] \(.description)" + (if .fix then " → " + .fix else "" end)' "$ANTIPATTERNS" 2>/dev/null)
   fi
   if [ -d "$STANDARDS" ]; then
     while IFS= read -r frag; do
       path_matches "$(read_applyto "$frag")" || continue
       body=$(strip_frontmatter "$frag")
-      [ -n "$body" ] || continue
-      frag_paths+=("${frag#$root/}"); frag_bodies+=("$body")
+      [ -n "$body" ] && item f "$body" "- ${frag#$root/} — pattern fragment"
     done < <(find "$STANDARDS" -maxdepth 1 -name '*.md' 2>/dev/null | sort)
   fi
   if [ -d "$INSTRUCTIONS" ]; then
@@ -160,14 +174,13 @@ if [ -n "$artifact" ] && [ ! -e "$mark_dir/art-$artifact" ]; then
 fi
 
 # ---- LIBRARY-TYPE scope (one fragment per lib-type) — once per lib-type ----
-libstd=""
 if [ -d "$LIBTYPES" ]; then
   while IFS= read -r frag; do
     path_matches "$(read_applyto "$frag")" || continue
     key="libtype-$(basename "$frag" .md)"
     [ -e "$mark_dir/$key" ] && continue
     : > "$mark_dir/$key" 2>/dev/null
-    body=$(strip_frontmatter "$frag"); [ -n "$body" ] && libstd="${libstd}${body}"$'\n\n'
+    body=$(strip_frontmatter "$frag"); [ -n "$body" ] && item l "$body" "- ${frag#$root/} — library-type standard"
   done < <(find "$LIBTYPES" -name '*.md' 2>/dev/null | sort)
 fi
 
@@ -187,45 +200,92 @@ while [ -n "$d" ] && [ "$d" != "/" ] && [ "$d" != "$root" ]; do
 done
 
 # ---- Nothing new this session? stay silent. ----
-[ -z "$sections$patterns$guides$libstd$notes_file" ] && [ "${#frag_paths[@]}" -eq 0 ] && exit 0
+[ "${#kinds[@]}" -eq 0 ] && [ -z "$guides$notes_file" ] && exit 0
 
 # ---- Assemble additionalContext under the byte budget, in priority order ----
-ctx="📐 Standards for this ${artifact:-source} file ($(basename "$fp")) — apply these BEFORE writing."
+lead="📐 Standards for this ${artifact:-source} file ($(basename "$fp")) — apply these BEFORE writing."
 if [ "$bash_write" -eq 1 ]; then
-  ctx="⚠️ This Bash command writes a source file (${rel}). Source edits belong in the Edit / Write tools — they are what the standards hook, the IDE and review tooling key on; a shell rewrite bypasses all of it. If you continue in Bash, the standards below still apply.
+  lead="⚠️ This Bash command writes a source file (${rel}). Source edits belong in the Edit / Write tools — they are what the standards hook, the IDE and review tooling key on; a shell rewrite bypasses all of it. If you continue in Bash, the standards below still apply.
 
-${ctx}"
+${lead}"
 fi
-ctx="${ctx}"$'\n\n'
-# The guide / pointer list is appended last but must always fit: reserve its worst case
-# (every fragment demoted to a pointer) before sizing the notes and fragment blocks.
-reserve=$(( $(nbytes "$guides") + 110 * ${#frag_paths[@]} + 100 ))
+lead="${lead}"$'\n\n'
+c_hdr="── Constraints (authoritative · ${CONSTRAINTS#$root/}) ──"$'\n'
+a_hdr="── Anti-patterns to avoid (${ANTIPATTERNS#$root/}) ──"$'\n'
+l_hdr="── Library-type standard (${LIBTYPES#$root/}) ──"$'\n'
+f_hdr="── Patterns & shapes (${STANDARDS#$root/}) ──"$'\n'
+p_hdr="── Not inline (over the ${BUDGET_BYTES}-byte budget) — open these before writing ──"$'\n'
+g_block=""
+[ -n "$guides" ] && g_block="── Deep guides — open if relevant (routed by applyTo) ──"$'\n'"${guides}"
 
-[ -n "$sections" ] && ctx="${ctx}── Constraints (authoritative · ${CONSTRAINTS#$root/}) ──
-${sections}"
-[ -n "$patterns" ] && ctx="${ctx}── Anti-patterns to avoid (${ANTIPATTERNS#$root/}) ──
-${patterns}
+# ap_line [all] -> the anti-pattern pointer line naming the ids not inline (every id with "all").
+ap_line() {
+  local i list=""
+  for i in "${!kinds[@]}"; do
+    [ "${kinds[$i]}" = a ] || continue
+    [ -z "$1" ] && [ -n "${inl[$i]}" ] && continue
+    list="${list:+$list, }${ptrs[$i]}"
+  done
+  [ -n "$list" ] && printf -- '- %s — %s' "${ANTIPATTERNS#$root/}" "$list"
+  return 0
+}
+# upgrade <kind> <block header> <block tail> -> inlines, in order, each item of that kind whose bytes
+# over its pointer (plus the block frame, on the block's first inline item) fit the slack.
+upgrade() {
+  local i cost frame
+  frame=$(nbytes "$2$3")
+  for i in "${!kinds[@]}"; do
+    [ "${kinds[$i]}" = "$1" ] || continue
+    cost=$(( ib[i] - pb[i] + frame ))
+    [ "$cost" -le "$slack" ] || continue
+    inl[$i]=1; slack=$(( slack - cost )); frame=0
+  done
+}
+# block <kind> <block header> <block tail> -> appends that kind's inline items to ctx, framed.
+block() {
+  local i out=""
+  for i in "${!kinds[@]}"; do
+    [ "${kinds[$i]}" = "$1" ] && [ -n "${inl[$i]}" ] && out="${out}${bodies[$i]}"
+  done
+  [ -n "$out" ] && ctx="${ctx}$2${out}$3"
+  return 0
+}
 
-"
-[ -n "$libstd" ] && ctx="${ctx}── Library-type standard (${LIBTYPES#$root/}) ──
-${libstd}"
-remaining=$(( BUDGET_BYTES - reserve - $(nbytes "$ctx") ))
-
-# Library notes: whole file when it fits; otherwise intro + first section (if it fits) + the
-# full heading index, so the writer knows which sections to open before touching the library.
+# Library notes fall back to a one-line pointer, reserved like the items' pointers.
+notes=""; floor=""
 if [ -n "$notes_file" ]; then
   notes_body=$(strip_frontmatter "$notes_file")
   hdr="── Library notes (${libpath}) ──"$'\n'
-  if [ $(( $(nbytes "$notes_body") + ${#hdr} + 8 )) -le "$remaining" ]; then
-    ctx="${ctx}${hdr}${notes_body}"$'\n\n'
-  else
-    kb=$(( ($(wc -c < "$notes_file") + 1023) / 1024 ))
+  kb=$(( ($(wc -c < "$notes_file") + 1023) / 1024 ))
+  floor="${hdr}(${kb} KB — read ${libpath} before writing here; nothing of it fits inline: \`grep -n '^##' ${libpath}\`)"$'\n\n'
+fi
+
+# Reserve every item as its pointer (the anti-pattern line at its longest), then spend the slack
+# upgrading items to inline in priority order: the payload fits and every item is inline or named.
+reserved=$(nbytes "${lead}${floor}${g_block}")
+for i in "${!kinds[@]}"; do reserved=$(( reserved + pb[i] )); done
+ap=$(ap_line all); [ -n "$ap" ] && reserved=$(( reserved + $(nbytes "$ap") + 1 ))
+[ "${#kinds[@]}" -gt 0 ] && reserved=$(( reserved + $(nbytes "$p_hdr") + 1 ))
+slack=$(( BUDGET_BYTES - reserved ))
+
+upgrade c "$c_hdr" ""
+upgrade a "$a_hdr" $'\n'
+upgrade l "$l_hdr" ""
+
+# Library notes: whole file when it fits; otherwise intro + first section + the full heading
+# index, then intro + as much of the index as fits, so the writer knows which sections to open.
+if [ -n "$notes_file" ]; then
+  avail=$(( slack + $(nbytes "$floor") ))
+  notes="${hdr}${notes_body}"$'\n\n'
+  if [ "$(nbytes "$notes")" -gt "$avail" ]; then
     intro=$(printf '%s\n' "$notes_body" | awk '/^## /{exit} {print}')
     first=$(printf '%s\n' "$notes_body" | awk '/^## /{n++} n==1{print} n==2{exit}')
     toc=$(printf '%s\n' "$notes_body" | grep -E '^##+ ')
     toc_total=$(printf '%s\n' "$toc" | grep -c .)
     idx_hdr=$'\n'"── Section index of ${libpath} (${kb} KB — only the intro is inline; open the sections that touch your change before writing) ──"$'\n'
-    # fit_toc <bytes> -> as many heading lines as fit, then a count of the rest with the grep to list them.
+    # more_line <n> -> the line standing in for n index headings left out.
+    more_line() { printf '… %d more sections — `grep -n '"'"'^##'"'"' %s`' "$1" "$libpath"; }
+    # fit_toc <bytes> -> as many heading lines as fit, then more_line for the rest.
     fit_toc() {
       local budget=$1 out="" n=0 line
       while IFS= read -r line; do
@@ -233,41 +293,41 @@ if [ -n "$notes_file" ]; then
         out="${out}${line}"$'\n'; n=$((n+1))
       done <<< "$toc"
       printf '%s' "$out"
-      [ "$n" -lt "$toc_total" ] && printf '… %d more sections — `grep -n '"'"'^##'"'"' %s`\n' "$((toc_total - n))" "$libpath"
+      [ "$n" -lt "$toc_total" ] && more_line "$((toc_total - n))"
       return 0
     }
-    block="${hdr}${intro}"$'\n'"${first}"$'\n'"${idx_hdr}${toc}"$'\n\n'
-    if [ "$(nbytes "$block")" -gt "$remaining" ]; then
+    notes="${hdr}${intro}"$'\n'"${first}"$'\n'"${idx_hdr}${toc}"$'\n\n'
+    if [ "$(nbytes "$notes")" -gt "$avail" ]; then
       head_part="${hdr}${intro}"$'\n'"${idx_hdr}"
-      toc_budget=$(( remaining - $(nbytes "$head_part") - 120 ))
-      if [ "$toc_budget" -gt 80 ]; then
-        block="${head_part}$(fit_toc "$toc_budget")"$'\n\n'
-      else
-        block="${hdr}(${kb} KB — read ${libpath} before writing here; nothing of it fits inline: \`grep -n '^##' ${libpath}\`)"$'\n\n'
-      fi
+      toc_budget=$(( avail - $(nbytes "$head_part") - $(nbytes "$(more_line "$toc_total")") - 2 ))
+      notes="$floor"
+      [ "$toc_budget" -gt 80 ] && notes="${head_part}$(fit_toc "$toc_budget")"$'\n\n'
+      [ "$(nbytes "$notes")" -le "$avail" ] || notes="$floor"
     fi
-    ctx="${ctx}${block}"
   fi
-  remaining=$(( BUDGET_BYTES - reserve - $(nbytes "$ctx") ))
+  slack=$(( slack - $(nbytes "$notes") + $(nbytes "$floor") ))
 fi
 
-# Pattern fragments: each whole when it fits, else a pointer under the guides list.
-frags=""; frag_pointers=""
-i=0
-while [ "$i" -lt "${#frag_paths[@]}" ]; do
-  body="${frag_bodies[$i]}"; path="${frag_paths[$i]}"
-  if [ $(( $(nbytes "$frags") + $(nbytes "$body") + 80 )) -le "$remaining" ]; then
-    frags="${frags}${body}"$'\n\n'
-  else
-    frag_pointers="${frag_pointers}- ${path} — pattern fragment (did not fit inline; open it)"$'\n'
+upgrade f "$f_hdr" ""
+
+ctx="$lead"
+block c "$c_hdr" ""
+block a "$a_hdr" $'\n'
+block l "$l_hdr" ""
+ctx="${ctx}${notes}"
+block f "$f_hdr" ""
+pointers=""
+for k in c a l f; do
+  if [ "$k" = a ]; then
+    ap=$(ap_line); [ -n "$ap" ] && pointers="${pointers}${ap}"$'\n'
+    continue
   fi
-  i=$((i+1))
+  for i in "${!kinds[@]}"; do
+    [ "${kinds[$i]}" = "$k" ] && [ -z "${inl[$i]}" ] && pointers="${pointers}${ptrs[$i]}"
+  done
 done
-[ -n "$frags" ] && ctx="${ctx}── Patterns & shapes (${STANDARDS#$root/}) ──
-${frags}"
-guides="${frag_pointers}${guides}"
-[ -n "$guides" ] && ctx="${ctx}── Deep guides — open if relevant (routed by applyTo) ──
-${guides}"
+[ -n "$pointers" ] && ctx="${ctx}${p_hdr}${pointers}"$'\n'
+ctx="${ctx}${g_block}"
 
 jq -n --arg ctx "$ctx" '{
   hookSpecificOutput: {
