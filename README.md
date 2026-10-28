@@ -205,6 +205,6 @@ A publish runs these steps in order:
 
    A missing file, a name without its plugin prefix, a hook line other than `exit 0 · 0 bytes`, or a fallback that guesses instead of asking is a defect: fix it in the source repo and publish again from step 1.
 6. Commit and push to `main`.
-7. In each repo that uses the plugins, run `claude plugin marketplace update giga-agents`. Auto-update is off for this marketplace, so a repo stays on the previous commit until this step runs.
+7. In each repo that uses the plugins, run `claude plugin marketplace update giga-agents`, then `claude plugin update <plugin>@giga-agents --scope project` for each plugin the repo installs, and restart its sessions. Auto-update is off for this marketplace and every install stays pinned to the commit it was installed at: the marketplace update refreshes the catalog only, and the plugin update moves the install.
 
 For local development, load a plugin straight from the working tree: `claude --plugin-dir plugins/giga-workflow --plugin-dir plugins/giga-ux`.
