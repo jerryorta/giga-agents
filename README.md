@@ -6,7 +6,7 @@ Claude Code plugins for product, UX and delivery workflows, built and run every 
 | --- | --- |
 | `giga-ux` | UX architecture and review. A `ux-design` skill plus three subagents: `ux-architect` wireframes a feature before its visual design, `ux-reviewer` reviews it in the running app after it is built, and `ux-blind-user` answers blind first-click and expectation tests with no access to the code. |
 | `giga-workflow` | A Jira epic workflow in 15 skills. `/epic-plan` cuts an epic into conflict-minimising waves; `/epic-next` + `/jira` take one story from ticket to plan to code; `/epic-story-complete`, `/epic-merge-pr` and `/epic-story-ship` commit, open, merge and close it; `/epic-loop` runs a whole board unattended, one agent per story, pausing only for what needs a human. Around them: `/epic-config`, `/epic-evolution-audit`, `/epic-review`, `/create-jira`, `/post-merge-cleanup`, `/epic-cross-actor-test`, `/dev-server` and `/clean-exit`. |
-| `giga-angular` | Two Angular skills that take your repo's conventions from config. `/create-storybook` writes a component's four-file story set inside your Storybook review container, shaped like your example stories; `/ngrx-component-state` decides where each piece of a component's state belongs and builds its colocated NgRx SignalStore, laid out like your reference stores. |
+| `giga-angular` | Seven Angular skills that take your repo's conventions from config. `/create-storybook` writes a component's four-file story set inside your Storybook review container, shaped like your example stories; `/ngrx-component-state` decides where each piece of a component's state belongs and builds its colocated NgRx SignalStore, laid out like your reference stores; `/ngrx-global-store` authors a global `@ngrx/store` slice; `/new-domain` scaffolds a domain's app and library set with Nx generators; `/verify-theming` and `/verify-accessibility` check and fix a file's theme tokens, accessible names and test selectors; `/promote-component` moves a component into a shared or domain design library. |
 | `giga-standards` | Write-time coding standards. A `PreToolUse` hook that, when an agent writes a file (with Write, Edit or MultiEdit, or a Bash command that writes a source file), injects the constraints sections, anti-patterns, standards fragments, library-type standard and nearest `AGENTS.md` that govern it: routed by a table in your repo's config, under a size budget, once per agent context. |
 
 ## Install
@@ -101,6 +101,7 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
   "angular": {
     "prefix": "acme",
     "storybook": {
+      "app": "apps/storybook",
       "reviewContainerImport": "@acme/storybook",
       "storyExamples": [{ "name": "Button", "path": "libs/ui/src/lib/button/stories/" }]
     },
@@ -109,7 +110,205 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
       "standards": ["docs/constraints.md § Component State"]
     },
     "ngrxDocs": "~/src/ngrx-platform",
-    "globalStoreSkill": "ngrx-global-store"
+    "globalStoreSkill": "ngrx-global-store",
+    "globalStore": {
+      "layout": "folder-per-slice",
+      "standards": [
+        "docs/state.md § Global Store"
+      ],
+      "stores": [
+        {
+          "name": "acme",
+          "lib": "libs/acme/store",
+          "alias": "@acme/acme-store",
+          "registration": "libs/acme/store/src/lib/acme-store.providers.ts",
+          "registrationNote": "reducers in ACME_REDUCERS, effects in ACME_EFFECTS, listener services injected in its app initializer",
+          "references": [
+            {
+              "path": "libs/acme/store/src/lib/+account/",
+              "note": "single record with writes and a facade"
+            }
+          ],
+          "standards": [
+            "libs/acme/store/AGENTS.md"
+          ],
+          "helpers": {
+            "writeEffect": {
+              "symbol": "acmeWriteEffect",
+              "module": "libs/acme/store/src/lib/firestore-write"
+            }
+          }
+        }
+      ],
+      "firestore": {
+        "helpers": {
+          "firestoreService": {
+            "symbol": "AcmeFirestoreService",
+            "module": "@acme/firebase",
+            "note": "setMergeDoc$ is the default write"
+          },
+          "listenerContract": {
+            "symbol": "ListenerService",
+            "module": "@acme/firebase"
+          },
+          "writeState": {
+            "symbol": "WriteStateSlice",
+            "module": "@acme/firebase"
+          },
+          "queryCache": {
+            "symbol": "QueryCache",
+            "module": "@acme/firebase"
+          }
+        },
+        "standards": [
+          "docs/constraints.md § Firestore"
+        ]
+      }
+    },
+    "newDomain": {
+      "scope": "@acme",
+      "appsRoot": "apps",
+      "libsRoot": "libs",
+      "app": {
+        "generator": "@nx/angular:application",
+        "flags": [
+          "--routing=true",
+          "--e2eTestRunner=none"
+        ]
+      },
+      "libs": [
+        {
+          "type": "models",
+          "generator": "@nx/js:library"
+        },
+        {
+          "type": "store",
+          "generator": "@nx/angular:library"
+        },
+        {
+          "type": "themes",
+          "generator": "@nx/angular:library",
+          "flags": [
+            "--unitTestRunner=none"
+          ],
+          "tests": false
+        }
+      ],
+      "tags": [
+        "scope:<domain>",
+        "type:<type>"
+      ],
+      "guide": "docs/domains.md",
+      "referenceDomain": "acme",
+      "themeExample": "libs/acme/themes/src/lib/styles/",
+      "scripts": {
+        "serve": {
+          "name": "serve:<domain>",
+          "command": "npx nx run <domain>-app:serve --port <port>"
+        },
+        "build": {
+          "name": "build:<domain>",
+          "command": "npx nx run <domain>-app:build --configuration=production"
+        }
+      },
+      "stubs": {
+        "dirs": [
+          "apps/<domain>/backend"
+        ],
+        "nxignore": [
+          "apps/<domain>/backend"
+        ],
+        "eslintExclude": [
+          "apps/<domain>/backend/**/*"
+        ]
+      },
+      "moduleBoundaries": "eslint.config.mjs",
+      "release": {
+        "symbol": "provideAppRelease",
+        "module": "@acme/release",
+        "doc": "docs/release.md",
+        "check": "npm run lint",
+        "followUps": [
+          "the update prompt"
+        ]
+      },
+      "frameworkFreeLib": {
+        "config": "eslint.config.mjs",
+        "export": "frameworkFreeLib",
+        "libs": [
+          "models"
+        ],
+        "example": "libs/acme/models/eslint.config.mjs"
+      },
+      "backend": {
+        "dir": "apps/<domain>/backend/functions",
+        "aliasFiles": [
+          "tsconfig.json"
+        ],
+        "aliasLibs": [
+          "models"
+        ],
+        "example": "apps/acme/backend/functions"
+      },
+      "secrets": {
+        "doc": "docs/secrets.md § Adding a domain"
+      }
+    },
+    "theming": {
+      "tokenFile": "libs/<domain>/themes/src/lib/styles/_<prefix>-tokens.scss",
+      "tokenDocs": "libs/<domain>/themes/AGENTS.md",
+      "standards": [
+        "docs/constraints.md § Styling"
+      ],
+      "bannedTokens": [
+        "--legacy-"
+      ],
+      "variants": [
+        {
+          "paths": [
+            "libs/studio/",
+            "apps/studio/"
+          ],
+          "skill": "verify-theming-studio"
+        }
+      ]
+    },
+    "accessibility": {
+      "standards": [
+        {
+          "doc": "docs/a11y.md"
+        },
+        {
+          "match": [
+            "libs/shop/**",
+            "apps/shop/**"
+          ],
+          "doc": "libs/shop/design-library/AGENTS.md"
+        }
+      ]
+    },
+    "promote": {
+      "sharedLibrary": {
+        "path": "libs/shared/ui",
+        "prefix": "acme",
+        "alias": "@acme/ui",
+        "storyTitle": "Shared UI"
+      },
+      "domains": [
+        {
+          "domain": "shop",
+          "prefix": "shp",
+          "storyTitle": "Shop"
+        }
+      ],
+      "domainLibraryPath": "libs/<domain>/design-library",
+      "libraryDoc": "docs/libraries.md",
+      "banned": [
+        "@legacy/ui"
+      ],
+      "commitScope": "ui",
+      "verify": "npx nx affected -t lint test"
+    }
   },
   "workflow": {
     "plans": { "repo": "~/plans", "script": "~/plans/scripts/plans.py", "guide": "~/plans/AGENTS.md", "autoPush": false },
@@ -153,8 +352,13 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 | `ux.brandVoice.guides` | the voice guide checked for each app's copy |
 | `ux.devServerSkill` | the skill that starts the app for a review |
 | `ux.viewportDoc` · `ux.backNavigationRule` | breakpoints beyond 320 px, 390 px and 768–1023 px; the repo's rule for in-app Back |
-| `angular.prefix` · `angular.storybook` | the component prefix that names the Storybook review container, the module that exports it, and the example stories to copy |
+| `angular.prefix` · `angular.storybook` | the component prefix that names the Storybook review container, the module that exports it, the example stories to copy, and the Storybook app a new domain's design library registers with (`storybook.app`) |
 | `angular.componentState` · `angular.ngrxDocs` · `angular.globalStoreSkill` | the reference stores and state standards a SignalStore follows; the local NgRx docs clone (`$NGRX_DOCS` wins); the skill that builds a global store slice |
+| `angular.globalStore` | the global-store slice layout (`folder-per-slice` or `flat`); each store library's path, barrel alias, registration file and reference slices; the store standards; optional Firestore helpers (by key) and rules, which turn on the Firestore section |
+| `angular.newDomain` | a new domain's library set, tags, alias scope and roots; the guide and reference domain the workers copy; the port scripts; optional steps: placeholder dirs, module boundaries, release wiring, framework-free lint rule, backend aliases, secrets, AGENTS.md pointers, voice guide |
+| `angular.theming` | the token-file and token-docs path patterns (with `<domain>` and `<prefix>`), the styling standards, banned token prefixes, and path-scoped variant skills `/giga-angular:verify-theming` hands files to |
+| `angular.accessibility` | `standards[]`: rule docs for `/giga-angular:verify-accessibility`, each applying to every file or only to files under its `match` globs, and winning over the skill's generic rules |
+| `angular.promote` | the shared library's path, prefix, alias and story-title group; each source domain's prefix and story-title group; the domain library path pattern; the placement doc; banned content; commit scope; the verify command |
 | `workflow.plans` | the plans repo, its script and guide; whether it pushes its own commits |
 | `workflow.jira` | the Jira site, cloud id, MCP tool prefix, and the status a ready story sits in |
 | `workflow.git` · `workflow.commit` | base branch, branch prefix, merge method, auto-merge, CI; commit format and scope rules |

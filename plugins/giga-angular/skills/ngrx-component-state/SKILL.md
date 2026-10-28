@@ -18,7 +18,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `componentState.references` | the stores Phase 3 teaches from: `{ path, note }` entries, each note saying what that store shows | teach from the NgRx docs (Phase 2) and the generic layout in Phase 3 |
 | `componentState.standards` | the repo's state standards: every store this skill creates or refactors toward satisfies them, and they win over this skill's text | the invariants under **Standard** below are the standard |
 | `ngrxDocs` | the local clone of NgRx `platform` the API guidance comes from; `$NGRX_DOCS` wins when set | with `$NGRX_DOCS` unset too, ask the user for the clone and stop until they answer |
-| `globalStoreSkill` | the skill that authors a global `@ngrx/store` slice (actions, reducer, effects, selectors, facade) | build the slice from the NgRx store docs (`$NGRX_DOCS/projects/www/src/app/pages/guide/store/`), no hand-off |
+| `globalStoreSkill` | the skill that authors a global `@ngrx/store` slice (actions, reducer, effects, selectors, facade) | hand off to `/giga-angular:ngrx-global-store`, the sibling skill in this plugin |
 
 ---
 
@@ -78,7 +78,7 @@ Run the following with a 10-second timeout on the fetch; never block the skill o
 
 ```
 cd $NGRX_DOCS
-timeout 10 git fetch --quiet 2>/dev/null || echo "fetch-failed"
+perl -e 'alarm shift; exec @ARGV' 10 git fetch --quiet 2>/dev/null || echo "fetch-failed"
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse @{u} 2>/dev/null || echo "")
 DIRTY=$(git status --porcelain)
@@ -108,7 +108,7 @@ Ask the user one at a time when answers shape later questions:
 
 If converting an existing `@Injectable` class, read the source file completely before Phase 2.
 
-If the feature needs app-global persistence, multiple unrelated consumers, devtools time-travel, or websocket subscriptions — **stop and recommend the skill named in `globalStoreSkill` instead** (absent: a global slice built from the NgRx store docs). SignalStore is the wrong tool for those.
+If the feature needs app-global persistence, multiple unrelated consumers, devtools time-travel, or websocket subscriptions — **stop and recommend the skill named in `globalStoreSkill` instead** (absent: `/giga-angular:ngrx-global-store`). SignalStore is the wrong tool for those.
 
 ---
 
@@ -226,7 +226,7 @@ If refactoring, delete the dead local signals / effects after the store takes ov
 When **Routing** sends a concern to the global store:
 
 1. **Slice + facade already exist** → inject the facade (in the component, or for a system in its container/root), read via its exposed signals, dispatch via its methods. Delete the component's duplicated or hand-hydrated copy of that global state. Children of a system `inject()` the facade — don't prop-drill it.
-2. **Slice does not exist** → this is global-slice work. Stop and run the skill named in `globalStoreSkill` to author the slice (actions/reducer/effects/selectors/facade), then return here to wire the facade. With no `globalStoreSkill`, build the slice from `$NGRX_DOCS/projects/www/src/app/pages/guide/store/` (plus `effects/` and `entity/` as needed), then wire it.
+2. **Slice does not exist** → this is global-slice work. Stop and run the skill named in `globalStoreSkill` to author the slice (actions/reducer/effects/selectors/facade), then return here to wire the facade. With no `globalStoreSkill`, run `/giga-angular:ngrx-global-store`, then wire it.
 3. **Never** author actions / reducers / effects / selectors in this skill while `globalStoreSkill` names a skill — that boundary belongs to it.
 
 Clean split: this skill = component side (decision + local SignalStore + facade wiring); the `globalStoreSkill` skill = the global slice itself.
