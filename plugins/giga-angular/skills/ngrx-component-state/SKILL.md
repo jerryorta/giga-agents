@@ -198,7 +198,7 @@ Conventions, whatever the file names:
 Write files in dependency order, named as the reference names them:
 
 1. Multi-file shape: one feature file per cohesive concern, each with its own state slice (start with the most independent).
-2. The store — for the multi-file shape, the composition root: shared identity + one `withFeature` line per concern, in dependency order. A root holding two concerns splits, as does one past the size limit the repo's standards set.
+2. The store — for the multi-file shape, the composition root: shared identity + one `withFeature` line per concern, in dependency order. Split by the Phase 3 rule (concerns that each own state, methods and cleanup), or when a file passes the size limit the repo's standards set.
 3. Specs — one beside each feature and one for the root, per `testing.md`. Stubs the specs share go in `<name>.store.spec-setup.ts`; exclude `src/**/*.spec-setup.ts` in the lib's `tsconfig.lib.json` and include it in `tsconfig.spec.json`.
 
 Rules while writing:
