@@ -1,6 +1,6 @@
 ---
 name: ux-design
-description: Use before a feature, page or user flow gets its visual design (to wireframe its structure, place it in the app and name things), after it is built and before calling it done (to review it in the running app), and whenever someone asks how users move through an existing app or one of its sections ("can a user get to their notes from the dashboard", "how does a user reach the notes inside a course", "can a user find a course and take it", "is this flow intuitive", "where should this live", "does this section name make sense"). Also runs the whole-app review after an epic closes (`/giga-workflow:epic-review`). Covers information architecture, navigation, labels and metaphors, every word the user reads in the brand's voice, entry points, flow, states, app-wide consistency, and what to cut. Complements frontend-design, which designs how an isolated piece looks.
+description: Use before a feature, page or user flow gets its visual design (to wireframe its structure, place it in the app and name things), after it is built and before calling it done (to review it in the running app), and whenever someone asks how users move through an existing app or one of its sections ("can a user get to their notes from the dashboard", "how does a user reach the notes inside a course", "can a user find a course and take it", "is this flow intuitive", "where should this live", "does this section name make sense"). Also runs the whole-app review after an epic closes (`/giga-workflow:epic-review`). Covers information architecture, navigation, labels and metaphors, every word the user reads in the brand's voice, entry points, flow, states, app-wide consistency, and what to cut. Complements the frontend-design:frontend-design skill, which designs how an isolated piece looks.
 ---
 
 # UX Design & Review
@@ -23,7 +23,7 @@ What differs from repo to repo comes from `.claude/giga/config.json` at the repo
 | `ideas.policy` (top level) | its § Check for a match first and § Entry threshold, for every idea, recommendation and new scope | check the repo's open tickets for a match; ideas stay in the report for the owner |
 | `ideas.board` (top level) | the Idea Board the dispatching session writes to | no board; the owner reads the report |
 | `devServerSkill` | the skill that runs the app for Review | use the URL the dispatcher gave; with none, the app cannot be run |
-| `viewportDoc` | breakpoints the app ships beyond 320 px, 390 px and the 768–1023 px band | those three |
+| `viewportDoc` | breakpoints the app ships beyond 320 px, 390 px, the 768–1023 px band and 1280 px desktop | those four |
 | `backNavigationRule` | the repo's rule for what an in-app Back may call | Review step 5 as written |
 
 ## Where this sits
@@ -33,7 +33,7 @@ UX work bookends the visual design; it is not part of it.
 | Stage | Owner | Output |
 | --- | --- | --- |
 | **Before** — wireframe | `giga-ux:ux-architect` agent | UX brief + structural wireframes |
-| Visual design and build | the implementer, with `frontend-design` | the built piece |
+| Visual design and build | the implementer, with `frontend-design:frontend-design` | the built piece |
 | **After** — in the app | `giga-ux:ux-reviewer` agent | Review report |
 | **After an epic** — the whole app | `giga-ux:ux-reviewer` agent, from `/giga-workflow:epic-review` | Review report, whole-app scope |
 | Blind tests, for all three | `giga-ux:ux-blind-user` agents | one first click, or one expectation |
@@ -43,7 +43,7 @@ You speak for the person using the app, never for the code or the schedule. That
 **Orchestration.** The session building the feature dispatches the agents; it does not run the method itself.
 
 1. Dispatch `giga-ux:ux-architect` with the feature brief and any spec or plan. Put its **decisions for the owner** to the user before visual design starts.
-2. The implementer designs and builds from the brief with `frontend-design`. In an existing app the visual direction is the app's own design system — `frontend-design` spends its one risk inside it, never on a new palette. Concept names, navigation labels and the brief's Words come from the brief; `frontend-design` writes any remaining copy to the same rules and the brand's voice guide.
+2. The implementer designs and builds from the brief with `frontend-design:frontend-design` (the `frontend-design` plugin). In an existing app the visual direction is the app's own design system — `frontend-design:frontend-design` spends its one risk inside it, never on a new palette. Concept names, navigation labels and the brief's Words come from the brief; `frontend-design:frontend-design` writes any remaining copy to the same rules and the brand's voice guide.
 3. Dispatch `giga-ux:ux-reviewer` with the brief and the running app's URL.
 4. Apply § Authority to its verdict: one revision, then the owner.
 
@@ -75,7 +75,7 @@ Produce a **UX brief** — one section per heading, in this order. Start from wh
 6. **Flow and states.** The steps from start to done, then **after done**: where the user lands and the obvious next step. Every state the user can meet: first-run/empty (says what this is, why it is empty, and offers the action that fills it), loading, error (what happened, how to fix it), partial, permission denied.
 7. **Patterns.** The same kind of job looks and behaves the same everywhere: list → detail, create, join, delete, tabs. Reuse the app's pattern; a deviation needs a reason the user would notice.
 8. **App impact.** What adding this changes: one more nav choice at every decision, something pushed below the fold or off a phone tab bar, an existing label whose meaning shifts, a hub that now needs a link. App-wide problems that are not this piece's are reported, not built.
-9. **Wireframes.** One low-fidelity ASCII frame per screen on each job's path, plus one per state that changes the layout: where the screen sits (the nav item marked current), its heading, every control with its **real label** in priority order, and the way back. No colour, type or styling — that is `frontend-design`'s. Draft the frames, blind-test their labels (Review step 1, on the frames), then revise: a wrong first click caught here costs a word, not a rebuild. A label changed after its test is marked `untested` until it is run again.
+9. **Wireframes.** One low-fidelity ASCII frame per screen on each job's path, plus one per state that changes the layout: where the screen sits (the nav item marked current), its heading, every control with its **real label** in priority order, and the way back. No colour, type or styling — that is `frontend-design:frontend-design`'s. Draft the frames, blind-test their labels (Review step 1, on the frames), then revise: a wrong first click caught here costs a word, not a rebuild. A label changed after its test is marked `untested` until it is run again.
 10. **Predicted failures.** The screens and labels most likely to fail Review — a competing label, a control that may not fit a phone, one verb used for two acts. Review checks these first.
 
 ## Challenge the names — before and after
@@ -100,9 +100,9 @@ Labels are the start, not the whole. Every word a user reads or hears on the pat
 
 ## After — Review
 
-Against the rendered app: run it with the `devServerSkill` from § Project config, or open the URL the dispatcher gave, then drive it with claude-in-chrome at every breakpoint the app ships (phone, the 768–1023 px band, desktop, and any the `viewportDoc` adds). A review of what exists needs only Frame steps 1 and 2 first.
+Against the rendered app: run it with the `devServerSkill` from § Project config, or open the URL the dispatcher gave, then drive it with claude-in-chrome at every breakpoint the app ships (320 px, 390 px, the 768–1023 px band, 1280 px desktop, and any the `viewportDoc` adds). A review of what exists needs only Frame steps 1 and 2 first.
 
-**Coverage before `Ship`.** Check layout at 320 px, 390 px and across the 768–1023 px band, and contrast in every theme the app ships. A screen on the path never seen rendered is reported `owed`, never passed.
+**Coverage before `Ship`.** Check layout at 320 px, 390 px, across the 768–1023 px band and at 1280 px, and contrast in every theme the app ships. A screen on the path never seen rendered is reported `owed`, never passed.
 
 1. **Blind first-click.** One `giga-ux:ux-blind-user` run **per screen**, given the job sentence and the labels visible on that screen, taken from the rendered accessibility tree. Several jobs on the same screen may share a run; a run never sees a later screen. A screen that differs by persona or breakpoint gets a run per version. Where the choice diverges from the correct path is a findability failure; where it matches is a Keep.
 
@@ -173,7 +173,7 @@ The report keeps the shape above. Its findings and New scope reach the Idea Boar
 | --- | --- |
 | Accepting a section name because the team is used to it | Ask what the word promises; run the expectation test |
 | Judging as the developer who knows what a label means | Reason only from visible labels; the blind runs choose |
-| Styling in the wireframe | Structure and real labels only; the look is `frontend-design`'s |
+| Styling in the wireframe | Structure and real labels only; the look is `frontend-design:frontend-design`'s |
 | Designing the page, never its way in | Entry points are part of the piece |
 | Placing it where the data model lives | Place it where the user's job lives |
 | A new name for an existing concept | One name per concept, app-wide |
@@ -189,7 +189,7 @@ The report keeps the shape above. Its findings and New scope reach the Idea Boar
 | Counting clicks as the verdict | Score hesitation: CW fails and competing scent |
 | One verdict for everyone | A verdict per persona |
 | A task phrased with the target's label | Phrase it as the job |
-| Desktop only | Every shipped breakpoint: 320, 390 and 768–1023 px, and every theme |
+| Desktop only | Every shipped breakpoint: 320, 390, 768–1023 and 1280 px, and every theme |
 | Passing a screen never rendered | Report it `owed`; it is never `Ship` |
 | One Idea Board entry per finding | One polish entry per section or page; zero when the walkthrough passes |
 | Fix = "build feature X" | Fix the failing step; a `story` step that needs a new feature stops for the owner, an `existing` one is new scope |
