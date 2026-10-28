@@ -1,6 +1,6 @@
 # giga-agents
 
-Claude Code plugins for product, UX and delivery workflows, published from the `.claude/` of a production Nx monorepo (Angular, NgRx, Capacitor, Firebase) where they run every day.
+Claude Code plugins for product, UX and delivery workflows, built and run every day in a production Nx monorepo (Angular, NgRx, Capacitor, Firebase).
 
 | Plugin | What it does |
 | --- | --- |
@@ -167,15 +167,12 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 
 ## How this repo is built
 
-The source monorepo stays the source of truth: skills change there, in the same pull request as the code they describe. `scripts/sync_from_monorepo.py` publishes the skills, agents and hook files listed in `sync.json` verbatim, with one mechanical change and two checks — it namespaces every skill and agent name across the plugins (backticked names, `/skill` invocations and agents' preloaded skills; hook files are copied byte for byte), and it refuses to write anything if a copied file matches a `forbidden` pattern (home paths, private emails, private links, token prefixes) or a skill reads another skill's file outside its own plugin.
+This repo is the only copy of the plugins. Edit them here, in a `beta` worktree, never in the main working tree: the main working tree is the one every repo on the machine may be running.
 
-A publish runs these steps in order:
-
-1. `python3 -m unittest discover -s tests` tests the sync script: namespacing, hook files copied byte for byte, the leak guard, the cross-plugin path check and an end-to-end run against a fixture tree.
-2. `scripts/sync_from_monorepo.py --dry-run` builds and checks without writing anything.
-3. `scripts/sync_from_monorepo.py` writes `plugins/`.
-4. `claude plugin validate .`
-5. Smoke-test each plugin as installed. The source repo never exercises the namespaced names, the files one skill reads from another, the hook commands as installed, or the fallbacks a repo without config takes, so load each plugin into a scratch repo whose config is empty and ask, read-only, what it sees:
+1. Create the worktree once: `git worktree add ../giga-agents-beta -b beta`. Work and commit there.
+2. Run `git config core.hooksPath .githooks` once per clone. Then `scripts/check.sh` gates every commit and push: `python3 -m unittest discover -s tests`, `scripts/check_plugins.py` and `claude plugin validate .`. `check_plugins.py` refuses private content (home paths, private emails, private links, token prefixes) in `plugins/` and this README, a skill that reads another plugin's file through `${CLAUDE_SKILL_DIR}`, and a bare skill or agent name. Names in skills are written namespaced (`/giga-workflow:epic-next`, `giga-ux:ux-reviewer`), and hook files are never rewritten.
+3. Try a change in one session with `CLAUDE_CODE_PLUGIN_DIRS=<worktree>/plugins claude`.
+4. Smoke-test each plugin as installed. Load it into a scratch repo whose config is empty and ask, read-only, what it sees. Run this from the worktree:
 
    ```bash
    root=$PWD scratch=$(mktemp -d)
@@ -203,8 +200,6 @@ A publish runs these steps in order:
    done
    ```
 
-   A missing file, a name without its plugin prefix, a hook line other than `exit 0 · 0 bytes`, or a fallback that guesses instead of asking is a defect: fix it in the source repo and publish again from step 1.
-6. Commit and push to `main`.
-7. In each repo that uses the plugins, run `claude plugin marketplace update giga-agents`, then `claude plugin update <plugin>@giga-agents --scope project` for each plugin the repo installs, and restart its sessions. Auto-update is off for this marketplace and every install stays pinned to the commit it was installed at: the marketplace update refreshes the catalog only, and the plugin update moves the install.
-
-For local development, load a plugin straight from the working tree: `claude --plugin-dir plugins/giga-workflow --plugin-dir plugins/giga-ux`.
+   A missing file, a name without its plugin prefix, a hook line other than `exit 0 · 0 bytes`, or a fallback that guesses instead of asking is a defect: fix it in the worktree and run again from step 2.
+5. Merge `beta` into `main`. That puts the change live on every repo of this machine that loads this clone: put a direnv `.envrc` above your repos with `path_add CLAUDE_CODE_PLUGIN_DIRS "$HOME/<path to this clone>/plugins"`, and each session picks the plugins up at its next start or `/reload-plugins`. A skill that reads a new config field ships after the repos have that field.
+6. `git push` publishes to the public repo. Repos on other machines then run `claude plugin marketplace update giga-agents`, then `claude plugin update <plugin>@giga-agents --scope project` for each plugin they install, and restart their sessions. Auto-update is off for this marketplace and every install stays pinned to the commit it was installed at: the marketplace update refreshes the catalog only, and the plugin update moves the install.
