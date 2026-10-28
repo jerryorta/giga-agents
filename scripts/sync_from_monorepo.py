@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish skills and agents from the source monorepo into this marketplace's plugins.
+"""Publish skills, agents and hooks from the source monorepo into this marketplace's plugins.
 
 Usage: scripts/sync_from_monorepo.py [--source PATH] [--dry-run]
 The namespacing, leak and cross-plugin rules: README § How this repo is built.
@@ -50,6 +50,11 @@ def build_plugin(src: Path, out: Path, spec: dict, owner: dict[str, str]) -> Non
         (out / "agents").mkdir(parents=True, exist_ok=True)
     for agent in agents:
         shutil.copy2(src / ".claude" / "agents" / f"{agent}.md", out / "agents" / f"{agent}.md")
+    hooks = spec.get("hooks", [])
+    if hooks:
+        (out / "hooks").mkdir(parents=True, exist_ok=True)
+    for hook in hooks:
+        shutil.copy2(src / ".claude" / "hooks" / hook, out / "hooks" / hook)
     for md in out.rglob("*.md"):
         text = namespace(md.read_text(), owner)
         if md.parent.name == "agents":
@@ -112,15 +117,17 @@ def main() -> int:
 
         for plugin in config["plugins"]:
             dest = ROOT / "plugins" / plugin
-            for part in ("skills", "agents"):
+            for part in ("skills", "agents", "hooks"):
                 if args.dry_run:
                     continue
                 shutil.rmtree(dest / part, ignore_errors=True)
                 if (staged / plugin / part).exists():
                     shutil.copytree(staged / plugin / part, dest / part)
+            spec = config["plugins"][plugin]
+            hooks = f", {len(spec['hooks'])} hook files" if spec.get("hooks") else ""
             print(f"{'checked' if args.dry_run else 'synced'} {plugin}: "
-                  f"{len(config['plugins'][plugin].get('skills', []))} skills, "
-                  f"{len(config['plugins'][plugin].get('agents', []))} agents")
+                  f"{len(spec.get('skills', []))} skills, "
+                  f"{len(spec.get('agents', []))} agents{hooks}")
     return 0
 
 

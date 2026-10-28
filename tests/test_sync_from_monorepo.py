@@ -164,6 +164,19 @@ class BuildPluginTest(unittest.TestCase):
             self.assertEqual((out / "skills/jira/scripts/run.sh").read_text(), script)
             self.assertEqual((out / "skills/jira/config.json").read_text(), config)
 
+    def test_copies_hook_files_byte_for_byte(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp, "src"), Path(tmp, "out")
+            script = "#!/usr/bin/env bash\n# see /epic-next and `ux-design`\n"
+            manifest = '{"hooks": {"PreToolUse": [{"matcher": "Write"}]}}\n'
+            write(src / ".claude/hooks/inject.sh", script)
+            write(src / ".claude/hooks/hooks.json", manifest)
+
+            sync.build_plugin(src, out, {"hooks": ["hooks.json", "inject.sh"]}, OWNER)
+
+            self.assertEqual((out / "hooks/inject.sh").read_text(), script)
+            self.assertEqual((out / "hooks/hooks.json").read_text(), manifest)
+
 
 class LeaksTest(unittest.TestCase):
     def test_every_forbidden_pattern_has_a_sample(self):
@@ -176,6 +189,11 @@ class LeaksTest(unittest.TestCase):
                     write(Path(tmp, "skills/x/SKILL.md"), f"Intro.\n{sample}\n")
                     self.assertEqual(sync.leaks(Path(tmp), [pattern]),
                                      [f"skills/x/SKILL.md:2: matches {pattern!r}"])
+
+    def test_reports_a_sample_inside_a_hook_script(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "hooks/x.sh"), "#!/usr/bin/env bash\ncd /Users/someone/Dev/app\n")
+            self.assertEqual(sync.leaks(Path(tmp), ["/Users/"]), ["hooks/x.sh:2: matches '/Users/'"])
 
     def test_stays_quiet_on_the_readme_example_values(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -222,16 +240,20 @@ class MainTest(unittest.TestCase):
             "plugins": {
                 "giga-ux": {"skills": ["ux-design"], "agents": ["ux-reviewer"]},
                 "giga-workflow": {"skills": ["jira"]},
+                "giga-standards": {"hooks": ["hooks.json", "inject.sh"]},
             },
             "forbidden": FORBIDDEN,
         }))
         write(self.root / "plugins/giga-ux/.claude-plugin/plugin.json", '{"name": "giga-ux"}\n')
         write(self.root / "plugins/giga-workflow/skills/retired/SKILL.md", "Retired.\n")
+        write(self.root / "plugins/giga-standards/hooks/retired.sh", "# retired\n")
         write(self.src / ".claude/skills/ux-design/SKILL.md", "Hand off to /jira.\n")
         write(self.src / ".claude/skills/jira/SKILL.md", "Dispatch `ux-reviewer`; its files live in skills/jira/.\n")
         write(self.src / ".claude/skills/jira/scripts/stop.sh", "# called by /jira\n")
         write(self.src / ".claude/agents/ux-reviewer.md",
               "---\nname: ux-reviewer\nskills:\n  - ux-design\n---\nThen /jira.\n")
+        write(self.src / ".claude/hooks/hooks.json", '{"hooks": {}}\n')
+        write(self.src / ".claude/hooks/inject.sh", "# after /jira, read `ux-design`\n")
 
     def run_main(self, *args: str) -> tuple[int, str, str]:
         out, err = io.StringIO(), io.StringIO()
@@ -250,16 +272,20 @@ class MainTest(unittest.TestCase):
         before = self.plugins()
         code, out, err = self.run_main("--dry-run")
         self.assertEqual(code, 0)
-        self.assertEqual(out, "checked giga-ux: 1 skills, 1 agents\nchecked giga-workflow: 1 skills, 0 agents\n")
+        self.assertEqual(out, "checked giga-ux: 1 skills, 1 agents\nchecked giga-workflow: 1 skills, 0 agents\n"
+                              "checked giga-standards: 0 skills, 0 agents, 2 hook files\n")
         self.assertEqual(err, "")
         self.assertEqual(self.plugins(), before)
 
     def test_sync_writes_the_namespaced_plugins(self):
         code, out, err = self.run_main()
         self.assertEqual(code, 0)
-        self.assertEqual(out, "synced giga-ux: 1 skills, 1 agents\nsynced giga-workflow: 1 skills, 0 agents\n")
+        self.assertEqual(out, "synced giga-ux: 1 skills, 1 agents\nsynced giga-workflow: 1 skills, 0 agents\n"
+                              "synced giga-standards: 0 skills, 0 agents, 2 hook files\n")
         self.assertEqual(err, "")
         self.assertEqual(self.plugins(), {
+            "giga-standards/hooks/hooks.json": '{"hooks": {}}\n',
+            "giga-standards/hooks/inject.sh": "# after /jira, read `ux-design`\n",
             "giga-ux/.claude-plugin/plugin.json": '{"name": "giga-ux"}\n',
             "giga-ux/agents/ux-reviewer.md": "---\nname: ux-reviewer\nskills:\n  - giga-ux:ux-design\n---\nThen /giga-workflow:jira.\n",
             "giga-ux/skills/ux-design/SKILL.md": "Hand off to /giga-workflow:jira.\n",
@@ -277,6 +303,18 @@ class MainTest(unittest.TestCase):
                 self.assertEqual(out, "")
                 self.assertIn("Refusing to publish", err)
                 self.assertIn("giga-workflow/skills/jira/SKILL.md:2: matches '/Users/'", err)
+                self.assertEqual(self.plugins(), before)
+
+    def test_a_leak_in_a_hook_script_fails_and_writes_nothing(self):
+        write(self.src / ".claude/hooks/inject.sh", "#!/usr/bin/env bash\ncd /Users/someone/Dev/app\n")
+        before = self.plugins()
+        for args in (("--dry-run",), ()):
+            with self.subTest(args=args):
+                code, out, err = self.run_main(*args)
+                self.assertEqual(code, 1)
+                self.assertEqual(out, "")
+                self.assertIn("Refusing to publish", err)
+                self.assertIn("giga-standards/hooks/inject.sh:2: matches '/Users/'", err)
                 self.assertEqual(self.plugins(), before)
 
     def test_a_cross_plugin_reference_fails_and_writes_nothing(self):

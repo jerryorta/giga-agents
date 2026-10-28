@@ -1,0 +1,27 @@
+{
+  "description": "Inject the standards that govern a file when it is written, routed by the `standards` table in .claude/giga/config.json.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/inject-standards.sh\""
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/reset-standards-markers.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

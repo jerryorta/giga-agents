@@ -1,0 +1,10 @@
+{
+  "name": "giga-standards",
+  "description": "Write-time coding standards: when an agent writes a file, inject the constraints sections, anti-patterns, standards fragments and library notes that govern it, routed by a table in your repo's config, under a size budget, once per agent context.",
+  "author": {
+    "name": "Jerry Orta",
+    "url": "https://github.com/jerryorta"
+  },
+  "repository": "https://github.com/jerryorta/giga-agents",
+  "keywords": ["standards", "coding-standards", "hooks", "context", "agents-md", "conventions"]
+}

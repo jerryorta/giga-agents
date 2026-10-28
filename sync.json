@@ -37,6 +37,15 @@
         "create-storybook"
       ],
       "agents": []
+    },
+    "giga-standards": {
+      "skills": [],
+      "agents": [],
+      "hooks": [
+        "hooks.json",
+        "inject-standards.sh",
+        "reset-standards-markers.sh"
+      ]
     }
   },
   "forbidden": [

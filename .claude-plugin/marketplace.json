@@ -22,6 +22,11 @@
       "name": "giga-angular",
       "source": "./plugins/giga-angular",
       "description": "Angular skills: scaffold a component's Storybook stories against your own review container and story examples, and place a component's reactive state in a colocated NgRx SignalStore that follows your repo's reference stores."
+    },
+    {
+      "name": "giga-standards",
+      "source": "./plugins/giga-standards",
+      "description": "Write-time coding standards: when an agent writes a file, inject the constraints sections, anti-patterns, standards fragments and library notes that govern it, routed by a table in your repo's config, under a size budget, once per agent context."
     }
   ]
 }
