@@ -21,8 +21,8 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `docs.agentsMd` | the `AGENTS.md` locations to consider (Phase 3), with `<app>` / `<domain>` to fill in | the nearest `AGENTS.md` above each file the ticket touches |
 | `docs.testingStrategy` | where the roster of projects declaring `typecheck` lives | skip the pointer |
 | `docs.commands` | the commands doc that deliberately omits dev-server launch details | skip the pointer |
-| `checks.gate` | the combined build / typecheck / lint / test run (Phase 6) | run `build`, `typecheck`, `lint` and `test` per affected project with `checks.single` |
-| `checks.single` | one target on one project (`<project>`, `<target>`), for slice checks and red-gate re-runs (Phases 5, 6) | run `checks.gate` instead |
+| `checks.gate` | the combined build / typecheck / lint / test run (Phase 6) | run `build`, `typecheck`, `lint` and `test` per affected project with `checks.single`; with both absent, ask the user for the check commands |
+| `checks.single` | one target on one project (`<project>`, `<target>`), for slice checks and red-gate re-runs (Phases 5, 6) | run `checks.gate` instead; with both absent, ask the user for the check commands |
 | `checks.affected` | the broad-change variant of the gate | use `checks.gate` only |
 | `checks.antiPatterns` | the anti-pattern checker run on touched files | skip that check and say so |
 | `planning.backendGlobs` | path globs that mark a backend slice (Phases 3b, 5a) | treat a plan as having no backend slice |
