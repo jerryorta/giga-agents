@@ -105,10 +105,13 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 
 The source monorepo stays the source of truth: skills change there, in the same pull request as the code they describe. `scripts/sync_from_monorepo.py` publishes the components listed in `sync.json` verbatim, with two mechanical changes — it namespaces every skill and agent name across the plugins (backticked names, `/skill` invocations and agents' preloaded skills), and it refuses to write anything if a copied file matches a `forbidden` pattern (home paths, private emails, private links, token prefixes).
 
-```bash
-scripts/sync_from_monorepo.py --dry-run   # build and check only
-scripts/sync_from_monorepo.py             # write plugins/
-claude plugin validate .
-```
+A publish runs these steps in order:
+
+1. `python3 -m unittest discover -s tests` tests the sync script: namespacing, the leak guard and an end-to-end run against a fixture tree.
+2. `scripts/sync_from_monorepo.py --dry-run` builds and checks without writing anything.
+3. `scripts/sync_from_monorepo.py` writes `plugins/`.
+4. `claude plugin validate .`
+5. Commit and push to `main`.
+6. In each repo that uses the plugins, run `claude plugin marketplace update giga-agents`. Auto-update is off for this marketplace, so a repo stays on the previous commit until this step runs.
 
 For local development, load a plugin straight from the working tree: `claude --plugin-dir plugins/giga-workflow --plugin-dir plugins/giga-ux`.
