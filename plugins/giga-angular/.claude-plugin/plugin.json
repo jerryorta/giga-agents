@@ -6,5 +6,6 @@
     "url": "https://github.com/jerryorta"
   },
   "repository": "https://github.com/jerryorta/giga-agents",
+  "license": "MIT",
   "keywords": ["angular", "storybook", "ngrx", "signal-store", "nx", "nx-generators", "theming", "accessibility", "design-library"]
 }

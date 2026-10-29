@@ -445,3 +445,7 @@ This repo is the only copy of the plugins. Two branches carry them: `beta`, held
    A missing file, a name without its plugin prefix, a hook line other than `exit 0 · 0 bytes`, or a fallback that guesses instead of asking is a defect: fix it in the worktree and run again from step 2.
 5. Fast-forward `beta` to the change (`git merge --ff-only <name>` in the `beta` worktree), push `beta` to `origin/beta`, and remove the change's worktree and branch. That puts the change live on every repo of this machine: each session picks the plugins up at its next start or `/reload-plugins`. A skill that reads a new config field ships after the repos have that field. The epic workflow (`giga-workflow`) makes the change worktree, fast-forwards `beta` and pushes it itself for a repo whose `.claude/giga/config.json` names this clone in `workflow.skillsRepo`.
 6. Publish: fast-forward `main` to `beta` (`git merge --ff-only beta` in the main working tree) and `git push`. Repos on other machines then run `claude plugin marketplace update giga-agents`, then `claude plugin update <plugin>@giga-agents --scope project` for each plugin they install, and restart their sessions. Auto-update is off for this marketplace and every install stays pinned to the commit it was installed at: the marketplace update refreshes the catalog only, and the plugin update moves the install.
+
+## License
+
+[MIT](LICENSE)

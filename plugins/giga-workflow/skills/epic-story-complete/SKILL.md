@@ -195,7 +195,7 @@ The subject follows `commit.format` and must satisfy:
 
 - **Format:** `commit.format` (`<type>(<scope>): <KEY> <subject>` when absent).
 - **Type:** lowercase, from the allowed set (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `style`, `ci`, `build`, `revert`).
-- **Scope:** `config.commitScope` (e.g. `concierge`). Always include — never omit the parens.
+- **Scope:** `config.commitScope` (e.g. `billing`). Always include — never omit the parens.
 - **KEY at the start of the subject** (matches repo convention).
 - **Header line ≤ 100 characters** total (cz default `subject-max-length`).
 - **No trailing period.** Imperative, present tense ("delete dormant load paths", not "deleted").
