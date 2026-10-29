@@ -197,7 +197,7 @@ The rest of the body is free Markdown. These are the headings the skills find by
 | `## Ideas for the Idea Board` | story | `/giga-workflow:jira` and a `/giga-workflow:epic-loop` story agent, for an idea that meets the entry threshold but cannot be written to the board (no `ideas.board`, or no `ArtifactData` in that context); a note that fails the threshold never goes here | `/giga-workflow:epic-review`, which posts them |
 | `## Outcome — shipped (PR #<N>)`, with a `### Pinned` list | story | `/giga-workflow:epic-story-complete` | `/giga-workflow:epic-story-complete`, which adds to it on a re-run |
 
-Write the wave plan as `## Wave Plan`. `section` also matches `## Wave plan`, `## Waves` and `## Wave order`, but `/giga-workflow:epic-plan` and `/giga-workflow:epic-merge-pr` look for `## Wave Plan` by name.
+Write the wave plan as `## Wave Plan`. `section` also matches `## Wave plan`, `## Waves` and `## Wave order`, but `/giga-workflow:epic-plan` looks for `## Wave Plan` by name.
 
 Entries are one line each, and the skills find a story's line by its key:
 

@@ -268,12 +268,50 @@ class RefsTest(unittest.TestCase):
                 self.assertEqual(check.broken_refs(plugin), [])
 
 
+class ArgRefsTest(unittest.TestCase):
+    def test_flags_a_digit_after_a_dollar_in_a_skill_and_an_agent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "Intro.\nawk '{print $0}'\n")
+            write(Path(tmp, "plugins/a/agents/y.md"), "Use $1 here.\n")
+            self.assertEqual(check.arg_refs(Path(tmp, "plugins"), Path(tmp)), [
+                f"plugins/a/agents/y.md:1: matches {check.ARG!r}",
+                f"plugins/a/skills/x/SKILL.md:2: matches {check.ARG!r}",
+            ])
+
+    def test_passes_other_dollar_forms(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"),
+                  "Read ${CLAUDE_SKILL_DIR}/ref.md with $ARGUMENTS.\nwt=$(git rev-parse HEAD) b=$b\n")
+            self.assertEqual(check.arg_refs(Path(tmp, "plugins"), Path(tmp)), [])
+
+    def test_ignores_files_claude_code_does_not_substitute(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "Intro.\n")
+            write(Path(tmp, "plugins/a/skills/x/scripts/a.sh"), "awk '{print $0}'\n")
+            write(Path(tmp, "plugins/a/skills/x/ref.md"), "awk '{print $0}'\n")
+            self.assertEqual(check.arg_refs(Path(tmp, "plugins"), Path(tmp)), [])
+
+    def test_main_fails_on_a_digit_after_a_dollar_in_a_skill(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "awk '{print $0}'\n")
+            write(Path(tmp, "README.md"), "Intro.\n")
+            err = io.StringIO()
+            with mock.patch.object(check, "ROOT", Path(tmp)), contextlib.redirect_stderr(err):
+                self.assertEqual(check.main(), 1)
+            self.assertEqual(err.getvalue(),
+                             "A skill or agent body holds `$<digit>`, which Claude Code replaces with an argument:\n"
+                             f"  plugins/a/skills/x/SKILL.md:1: matches {check.ARG!r}\n")
+
+
 class PublishedTreeTest(unittest.TestCase):
     def test_no_bare_names(self):
         self.assertEqual(check.published_bare_names(REPO, check.owners(PLUGINS)), [])
 
     def test_no_leaks(self):
         self.assertEqual(check.published_leaks(REPO, FORBIDDEN), [])
+
+    def test_no_arg_refs(self):
+        self.assertEqual(check.arg_refs(PLUGINS, REPO), [])
 
 
 if __name__ == "__main__":

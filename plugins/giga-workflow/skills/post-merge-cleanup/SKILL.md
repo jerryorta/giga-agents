@@ -117,7 +117,7 @@ sp=<skillsRepo.path> sb=<skillsRepo.branch>
 git -C "$sp" fetch -q origin "$sb" 2>/dev/null
 git -C "$sp" rev-parse -q --verify "origin/$sb" >/dev/null && x="^origin/$sb" || x=
 git -C "$sp" log --oneline --source --branches -E --grep='<KEY>([^0-9]|$)' $x
-wt=$(git -C "$sp" worktree list --porcelain | awk -v r="branch refs/heads/<branch-name>" '/^worktree /{w=substr($0,10)} $0==r{print w}')
+wt=$(git -C "$sp" for-each-ref --format='%(worktreepath)' "refs/heads/<branch-name>")
 [ -n "$wt" ] && git -C "$wt" status --short
 ```
 

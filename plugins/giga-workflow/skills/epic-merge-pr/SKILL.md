@@ -41,7 +41,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `git.autoMerge` | whether Step 5 may pass `--auto` | `--auto` is never passed |
 | `git.hasCI` | whether checks exist to wait on | `false`: never wait on or query checks |
 | `plans.repo` | the plans repo holding ticket and epic plan files (Steps 6, 6b) | skip Step 6b and say the repo has no `plans.repo` |
-| `plans.script` | the script behind `ensure` and `board` (Step 6b) | skip Step 6b and say the repo has no `plans.script` |
+| `plans.script` | the script behind `ensure`, `board` and `section` (Step 6b) | skip Step 6b and say the repo has no `plans.script` |
 | `epicCloseSkill` | the skill whose `Epic order` / `Plan next` block ends the report when cleanup closed the epic | omit that block |
 
 ---
@@ -218,15 +218,14 @@ This is `/giga-workflow:epic-next` Steps 5 → 7, read-only, and the pick is you
 the To Do keys and the epic's wave-plan section:
 
 ```bash
-epic=$(python3 <plans.script> ensure <config.epicKey>)
 python3 <plans.script> board --jql '<config.jql>' | python3 -c "import json,sys;print('To Do:',' '.join(i['key'] for i in json.load(sys.stdin)))"
-awk 'tolower($0) ~ /^## wave plan/ {f=1; next} /^## /{f=0} f' "$epic"
+python3 <plans.script> section <config.epicKey> Wave
 ```
 
 Take the first story **entry** in wave order whose key is To Do. Wave plans are hand-written and vary by
 board — `- KEY — …` lines, `- KEY: …`, numbered prose with keys mid-sentence — and a note above the
-first wave can name a later story in passing, so a first-key-in-the-section regex picks wrong. With no wave-plan section, read the ordered list the way
-Step 5 of `/giga-workflow:epic-next` does; a `config.storyOrdering === "jql"` board takes the first To Do key.
+first wave can name a later story in passing, so a first-key-in-the-section regex picks wrong. With no wave-plan section, `section` exits 1 and names the epic's plan file on stderr: read
+the ordered list from that file the way Step 5 of `/giga-workflow:epic-next` does; a `config.storyOrdering === "jql"` board takes the first To Do key.
 
 Then read its effort fresh — the owner edits the plan-file front matter by hand:
 

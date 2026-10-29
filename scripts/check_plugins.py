@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Check the published tree: no private content, no broken cross-file reads, no bare skill or agent names.
+"""Check the published tree: no private content, no broken cross-file reads, no bare skill or agent names,
+no `$<digit>` in a skill or agent body.
 
 Usage: scripts/check_plugins.py
 Rules: README § How this repo is built.
@@ -20,6 +21,7 @@ FORBIDDEN = [
     "github_pat_|ghp_[A-Za-z0-9]|ATATT",
 ]
 PUBLISHED = ["plugins", "docs", "README.md"]
+ARG = r"\$[0-9]"
 
 
 def owners(plugins_dir: Path) -> dict[str, str]:
@@ -106,6 +108,12 @@ def published_bare_names(root: Path, owner: dict[str, str]) -> list[str]:
     return [x for rel in PUBLISHED if (root / rel).exists() for x in bare_names(root / rel, owner, root)]
 
 
+def arg_refs(plugins_dir: Path, base: Path) -> list[str]:
+    """List each `$<digit>` in a SKILL.md or agent body, by its path from base: Claude Code replaces it with an argument."""
+    bodies = sorted([*plugins_dir.glob("*/skills/*/SKILL.md"), *plugins_dir.glob("*/agents/*.md")])
+    return [x for path in bodies for x in leaks(path, [ARG], base)]
+
+
 def report(heading: str, problems: list[str]) -> None:
     print(f"{heading}:", file=sys.stderr)
     print("\n".join(f"  {p}" for p in problems), file=sys.stderr)
@@ -119,12 +127,14 @@ def main() -> int:
     leaked = published_leaks(ROOT, FORBIDDEN)
     broken = {p.name: broken_refs(p) for p in plugins}
     bare = published_bare_names(ROOT, owner)
+    args = arg_refs(plugins_dir, ROOT)
 
     failed = False
     for heading, problems in (
         ("Private content", leaked),
         ("A skill reads a file outside its plugin", [x for v in broken.values() for x in v]),
         ("A skill or agent is named without its plugin prefix", bare),
+        ("A skill or agent body holds `$<digit>`, which Claude Code replaces with an argument", args),
     ):
         if problems:
             report(heading, problems)

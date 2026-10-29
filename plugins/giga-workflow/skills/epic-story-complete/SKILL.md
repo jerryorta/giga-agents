@@ -134,7 +134,7 @@ git rev-parse --abbrev-ref HEAD && git status --short && git diff --stat
 
 ```bash
 sp=<skillsRepo.path> sb=<skillsRepo.branch> b=$(git rev-parse --abbrev-ref HEAD) k='<KEY>([^0-9]|$)'
-wt=$(git -C "$sp" worktree list --porcelain | awk -v r="branch refs/heads/$b" '/^worktree /{w=substr($0,10)} $0==r{print w}')
+wt=$(git -C "$sp" for-each-ref --format='%(worktreepath)' "refs/heads/$b")
 git -C "$sp" fetch -q origin "$sb" 2>/dev/null; base=
 for r in "origin/$sb" origin/HEAD; do git -C "$sp" rev-parse -q --verify "$r" >/dev/null && { base=$r; break; }; done
 echo "== worktree ${wt:-none} · pushed base ${base:-none}"; [ -n "$wt" ] && git -C "$wt" status --short
@@ -308,7 +308,7 @@ mixed hunk rides with the feature.
 
 ```bash
 ( sp=<skillsRepo.path> sb=<skillsRepo.branch> b=<current-branch> wt=<story worktree; empty when gone> r=<skills refactor snapshot; empty when none>
-  live=$(git -C "$sp" worktree list --porcelain | awk -v r="branch refs/heads/$sb" '/^worktree /{w=substr($0,10)} $0==r{print w}')
+  live=$(git -C "$sp" for-each-ref --format='%(worktreepath)' "refs/heads/$sb")
   has() { git -C "$sp" rev-parse -q --verify "refs/heads/$b" >/dev/null; }
   if [ -n "$wt" ] && [ -n "$(git -C "$wt" status --porcelain)" ]; then
     if [ -n "$r" ] && ! git -C "$wt" log --format=%s "$sb..HEAD" | grep -q '^refactor('; then
