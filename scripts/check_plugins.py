@@ -19,6 +19,7 @@ FORBIDDEN = [
     "[a-z]+_secrets\\b",
     "github_pat_|ghp_[A-Za-z0-9]|ATATT",
 ]
+PUBLISHED = ["plugins", "docs", "README.md"]
 
 
 def owners(plugins_dir: Path) -> dict[str, str]:
@@ -51,15 +52,22 @@ def namespace_preloads(text: str, owner: dict[str, str]) -> str:
     return f"---\n{front}\n---\n" + text[match.end():]
 
 
-def leaks(tree: Path, patterns: list[str]) -> list[str]:
+def leaks(tree: Path, patterns: list[str], base: Path | None = None) -> list[str]:
+    """List each line under tree that matches a pattern, by its path from base (default: the tree, or a file's dir)."""
+    base = base or (tree.parent if tree.is_file() else tree)
     found = []
     files = [tree] if tree.is_file() else sorted(p for p in tree.rglob("*") if p.is_file())
     for path in files:
         for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
             for pattern in patterns:
                 if re.search(pattern, line):
-                    found.append(f"{path.relative_to(tree.parent if tree.is_file() else tree)}:{n}: matches {pattern!r}")
+                    found.append(f"{path.relative_to(base)}:{n}: matches {pattern!r}")
     return found
+
+
+def published_leaks(root: Path, patterns: list[str]) -> list[str]:
+    """List the leaks in every published path under root that exists, by its path from root."""
+    return [x for rel in PUBLISHED if (root / rel).exists() for x in leaks(root / rel, patterns, root)]
 
 
 def broken_refs(plugin_dir: Path) -> list[str]:
@@ -102,7 +110,7 @@ def main() -> int:
     plugins = sorted(p for p in plugins_dir.iterdir() if p.is_dir())
     owner = owners(plugins_dir)
 
-    leaked = leaks(plugins_dir, FORBIDDEN) + leaks(ROOT / "README.md", FORBIDDEN)
+    leaked = published_leaks(ROOT, FORBIDDEN)
     broken = {p.name: broken_refs(p) for p in plugins}
     bare = {p.name: bare_names(p, owner) for p in plugins}
 

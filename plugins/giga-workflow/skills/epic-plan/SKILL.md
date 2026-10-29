@@ -390,7 +390,7 @@ Skip the step when Step 9 confirmed nothing to create and nothing to move. Other
    1. `createJiraIssue` with `parent=<epicKey>`, the type and the summary. Read the `key`.
    2. `Write` its content to `<plans.repo>/<board>/<KEY>.md`: front matter `jira/project/board/type/epic/summary`, plus the scope and acceptance, and its source Idea Board entry ids when it has any.
    3. Move it to **`<jira.createStatus>`** (step 2 below) when it is not already there.
-   4. Run `jira_to_md.py stub <KEY>`.
+   4. Run `python3 <plans.script> stub <KEY>`.
 
    5. When the story came from adopted Idea Board entries, `update` each source entry's `storyKey`.
 

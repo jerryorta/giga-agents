@@ -1,8 +1,11 @@
+import contextlib
 import importlib.util
+import io
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parent.parent
 _spec = importlib.util.spec_from_file_location("check_plugins", REPO / "scripts" / "check_plugins.py")
@@ -134,6 +137,47 @@ class LeaksTest(unittest.TestCase):
             self.assertEqual(check.leaks(Path(tmp), FORBIDDEN), [])
 
 
+class PublishedLeaksTest(unittest.TestCase):
+    def test_reports_a_sample_under_docs_by_its_repo_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "Intro.\n")
+            write(Path(tmp, "docs/plans-repo.md"), "Intro.\ncd /Users/someone/Dev/app\n")
+            write(Path(tmp, "README.md"), "Intro.\n")
+            self.assertEqual(check.published_leaks(Path(tmp), FORBIDDEN),
+                             ["docs/plans-repo.md:2: matches '/Users/'"])
+
+    def test_reports_plugins_and_the_readme_by_their_repo_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "cd /Users/someone/Dev/app\n")
+            write(Path(tmp, "README.md"), "Intro.\ncd /Users/someone/Dev/app\n")
+            self.assertEqual(check.published_leaks(Path(tmp), ["/Users/"]), [
+                "plugins/a/skills/x/SKILL.md:1: matches '/Users/'",
+                "README.md:2: matches '/Users/'",
+            ])
+
+    def test_stays_quiet_on_a_clean_docs_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "Intro.\n")
+            write(Path(tmp, "docs/plans-repo.md"), "Run `python3 <plans.script> ensure ABC-123`.\n")
+            self.assertEqual(check.published_leaks(Path(tmp), FORBIDDEN), [])
+
+    def test_skips_a_missing_docs_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "Intro.\n")
+            write(Path(tmp, "README.md"), "Intro.\n")
+            self.assertEqual(check.published_leaks(Path(tmp), FORBIDDEN), [])
+
+    def test_main_fails_on_a_sample_under_docs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "Intro.\n")
+            write(Path(tmp, "docs/plans-repo.md"), "cd /Users/someone/Dev/app\n")
+            write(Path(tmp, "README.md"), "Intro.\n")
+            err = io.StringIO()
+            with mock.patch.object(check, "ROOT", Path(tmp)), contextlib.redirect_stderr(err):
+                self.assertEqual(check.main(), 1)
+            self.assertEqual(err.getvalue(), "Private content:\n  docs/plans-repo.md:1: matches '/Users/'\n")
+
+
 class RefsTest(unittest.TestCase):
     REF = "Read ${CLAUDE_SKILL_DIR}/../y/ref.md first.\n"
 
@@ -170,8 +214,7 @@ class PublishedTreeTest(unittest.TestCase):
                 self.assertEqual(check.bare_names(plugin, owner), [])
 
     def test_no_leaks(self):
-        self.assertEqual(check.leaks(PLUGINS, FORBIDDEN), [])
-        self.assertEqual(check.leaks(REPO / "README.md", FORBIDDEN), [])
+        self.assertEqual(check.published_leaks(REPO, FORBIDDEN), [])
 
 
 if __name__ == "__main__":

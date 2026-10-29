@@ -165,11 +165,11 @@ Returns JSON `[{key,status,category,type,priority,parent,summary}]` — the To-D
 Note its `Key`, `summary`, and group name (from the `config.groupLabel` section it appears under, or from the `priority` field if ordering is `"jql"`).
 
 **Story progress.** One call, recomputed fresh every time and never cached (stories are added mid-epic):
-`jira_to_md.py board --jql 'parent = <config.epicKey>'` → `total` = rows, `done` = rows with `category == "Done"`.
+`python3 <plans.script> board --jql 'parent = <config.epicKey>'` → `total` = rows, `done` = rows with `category == "Done"`.
 Every child issue type (Story and Bug) counts; children moved out of the epic no longer have it as parent and drop out.
 
 If **no stories are in "To Do"**: report `config.completionMessage`. Then count the epic's open children with
-`jira_to_md.py board --jql 'parent = <config.epicKey> AND statusCategory != Done'`. If the result is `[]`, the epic is
+`python3 <plans.script> board --jql 'parent = <config.epicKey> AND statusCategory != Done'`. If the result is `[]`, the epic is
 finished: invoke the skill named in `epicCloseSkill` as `closed <config.epicKey>` (absent: skip this hand-off) and print its block, whose `Plan next` names the epic to
 `/giga-workflow:epic-plan`, then `Review: /giga-workflow:epic-review <config.epicKey> — before /giga-workflow:epic-plan <NEXT-KEY>`. Stop either way.
 

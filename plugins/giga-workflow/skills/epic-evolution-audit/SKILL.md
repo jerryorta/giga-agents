@@ -385,7 +385,7 @@ Use the `Edit` tool on `$plan` to swap the "Replacing" block for the "Proposed e
 > **Atomicity note:** edit each candidate's file in its own `Edit` / `Write` call. Failures on one don't affect the others.
 > If the find-and-replace match fails (the "Replacing" block isn't found verbatim in the local file), report it to the user
 > and skip that candidate — never let the description go to the file partially mangled.
-> The plan file is the only copy of the description; Jira keeps status. Re-pointing Jira's stub description at the file (the DESTRUCTIVE `jira_to_md.py stub <KEY>` pass, §4) is a separate user action — this skill never writes descriptions to Jira.
+> The plan file is the only copy of the description; Jira keeps status. Re-pointing Jira's stub description at the file (the DESTRUCTIVE `python3 <plans.script> stub <KEY>` pass, §4) is a separate user action — this skill never writes descriptions to Jira.
 
 ## Step 9 — Final report
 
