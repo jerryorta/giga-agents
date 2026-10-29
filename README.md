@@ -47,30 +47,7 @@ Components are namespaced by the plugin: `/giga-ux:ux-design`, the agents `giga-
 
 ## What `giga-standards` expects
 
-- **`jq` and `git`** on `PATH`.
-- **Docs in these shapes**, each optional:
-  - a constraints doc made of `## ` sections, injected by heading prefix
-  - an anti-patterns JSON: `{ "patterns": [{ "id", "severity", "description", "fix" }] }`
-  - standards fragments, library-type standards and guides, each routed by an `applyTo:` front-matter glob (a precise glob injects; `'**'` never does)
-  - library notes: the nearest `AGENTS.md` above the written file
-- **No second copy of the hooks.** Hooks are not namespaced: if `.claude/settings.json` runs its own copy of `inject-standards.sh` or `reset-standards-markers.sh`, remove it, or both run.
-
-The hook reads the top-level `standards` key of `.claude/giga/config.json`. Paths are relative to the repo root.
-
-| Field | Used for | When absent |
-| --- | --- | --- |
-| `standards` | the whole routing table | the hook does nothing |
-| `standards.constraintsFile` | the constraints doc | no constraints sections |
-| `standards.antiPatternsFile` | the anti-patterns JSON | no anti-patterns |
-| `standards.fragmentsDir` | standards fragments (`*.md` at its top level), inline when they fit, else as pointers | no fragments |
-| `standards.libTypesDir` | one standard per library type | no library-type standard |
-| `standards.guidesDir` | `*.instructions.md` guides, listed as pointers | no guide pointers |
-| `standards.sourceFilePattern` | an extended regex for a source path; a Bash command that writes a matching path triggers the hook | Bash writes never trigger it |
-| `standards.budgetBytes` | the byte budget for the injected context | 9800 |
-| `standards.artifacts` | `[{ match, artifact, sections, antiPatterns, guide }]`: the constraints headings, anti-pattern ids and guide for each kind of file | no artifact layer, so only the library-type standard and `AGENTS.md` |
-| `standards.everyArtifact` | `[{ match, sections, antiPatterns }]`: headings and ids added to whichever artifact matched | nothing added |
-
-`match` globs are tested against the path relative to the repo root, and in each list the first entry that matches wins.
+What the hook needs, and each `standards` field with what it does when absent, are on [the giga-standards page](plugins/giga-standards/README.md).
 
 ## Per-repo config
 
@@ -368,7 +345,7 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 | `workflow.loop` · `workflow.browser` | what an unattended run must hand to a human, where it keeps its ledger, precedent sources, browser checks |
 | `workflow.skillsRepo` | optional: a second repo holding skills a story may change — its checkout, live branch, check and push commands; the epic workflow lands and pushes it with the story |
 | `workflow.secrets` · `workflow.notify` · `workflow.memoryDir` · `workflow.epicCloseSkill` | optional: secrets repos to sync after a merge, desktop notifications, a personal memory folder, a skill to run when an epic closes |
-| `standards` | which docs `giga-standards` injects for each kind of file, the Bash source-file pattern and the byte budget (see What `giga-standards` expects) |
+| `standards` | which docs `giga-standards` injects for each kind of file, the Bash source-file pattern and the byte budget (see [the giga-standards page](plugins/giga-standards/README.md)) |
 
 ## How this repo is built
 
