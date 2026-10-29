@@ -181,7 +181,7 @@ For each finding, name the affected sibling or downstream stories. If you need t
 `python3 <plans.script> board --jql 'parent = <config.epicKey>'` → JSON
 `[{key,status,category,type,priority,parent,summary}]` with live status.
 
-Hold the list as `epicEvolutionItems`. It appears in the Step 4 gate under "Epic evolution items", where the user can strike or amend entries **before** anything is created. Whatever survives the gate is **acted on automatically by Step 11** — new stories get minted `To Do` and added to the wave plan. The gate is the decision point; there is no second one afterwards.
+Hold the list as `epicEvolutionItems`. It appears in the Step 4 gate under "Epic evolution items", where the user can strike or amend entries **before** anything is created. Whatever survives the gate is **acted on automatically by Step 10** — new stories get minted `To Do` and added to the wave plan. The gate is the decision point; there is no second one afterwards.
 
 > **Epic-description discipline:** a "description edit" item targets the CHILD ticket whose scope it is — never the parent epic. What THIS story settled is not an evolution item at all — it goes in this story's own plan file at Step 9. Do not add story-level implementation detail, acceptance criteria, or follow-up specs to the epic; it stays overall-description + wave order (one-liners) + a one-line-per-story Shipped ledger + a lock index of one-line pointers at the specs and rulebook rules that pin them. New work → a child ticket created **`To Do`, never `Backlog`** (canonical evolution rule 3, in `/giga-workflow:epic-evolution-audit`), with its one-line entry added to the wave plan in the same action.
 

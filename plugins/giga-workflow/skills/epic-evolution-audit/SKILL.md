@@ -416,7 +416,7 @@ If any new-story recommendations exist, suggest the user create them **before** 
 | Skill | Relationship |
 |---|---|
 | `/giga-workflow:epic-next` | Produces the just-completed story. This skill audits the rest of the epic for drift the story introduced. |
-| `/giga-workflow:epic-story-complete` | Runs **after** this skill. Its built-in Step 5b (`Epic evolution check`) becomes a no-op once this skill has propagated the decisions explicitly. |
+| `/giga-workflow:epic-story-complete` | Runs **after** this skill. Its Step 2 (`Epic evolution scan`) becomes a no-op once this skill has propagated the decisions explicitly. |
 | `/giga-workflow:epic-story-ship` | Runs this skill as its composition step 0 (Steps 0 → 6 only): the findings print in its single `Story ship` gate instead of Step 7's prompt, approved edits apply after that gate in its one plans-repo commit, and new-story recommendations are minted by `/giga-workflow:epic-story-complete` Step 10(a). `--no-audit` skips it. |
 | `/giga-workflow:epic-config` | View / update the `epicEvolutionRules` field that drives this skill's audit dimensions. |
 | `/giga-workflow:epic-plan` | Uses the same wave-plan structure this skill keeps in sync. |

@@ -97,20 +97,20 @@ Otherwise:
    The existing config at .claude/giga/epic.<boardName>.json points at
    <baseConfig.epicKey> (<baseConfig.name>) — currently <status> in Jira (NOT Done).
 
-   Overwriting would strip the /giga-workflow:epic-next <boardName> and /giga-workflow:epic-story-complete <boardName>
+   Repointing it strips the /giga-workflow:epic-next <boardName> and /giga-workflow:epic-story-complete <boardName>
    shortcuts that anyone working on <baseConfig.epicKey> depends on.
 
    Options:
-     [A] Overwrite anyway — <baseConfig.epicKey> loses its <boardName> shortcut.
-         Choose this only if the in-flight work is paused / you'll re-plan
-         <baseConfig.epicKey> later.
-     [B] Create an alternate config file at:
+     [A] Repoint this board at <argEpicKey> — one board per domain.
+         <baseConfig.epicKey> keeps its stories and plan file, and gets its
+         <boardName> shortcut back when the board is repointed at it.
+     [B] Add a second board, for a parallel track you approve, at:
          .claude/giga/epic.<boardName>-<argEpicKey-lowercase>.json
          (board name becomes "<boardName>-<argEpicKey-lowercase>", invoked as
          /giga-workflow:epic-next <boardName>-<argEpicKey-lowercase>)
-         Both epics retain working shortcuts.
+         Both epics keep working shortcuts.
 
-   Default: [B] (safer).
+   Default: [A]. A second board for one domain forks its conventions, and they drift.
    ```
 
 4. Record the user's choice as `configFileMode`:
