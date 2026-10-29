@@ -14,7 +14,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `plans.repo` | the plans repo holding `<board>/<KEY>.md`, assets and the epic index | stop and say the repo has no `plans.repo` in `.claude/giga/config.json` |
 | `plans.script` | the `board` (epic check) and `stub` calls | stop and say the repo has no `plans.script` in `.claude/giga/config.json` |
 | `plans.guide` | the born-split convention shared with `/giga-workflow:jira` | skip the reference |
-| `plans.autoPush` | whether the plans repo commits and pushes itself | commit, then report the plans repo as unpushed |
+| `plans.autoPush` | whether the plans repo commits and pushes itself (Step 8) | push the plans repo right after committing |
 | `jira.site` | the browse link in the report | omit the link line |
 | `jira.cloudId` | the Jira cloud for every MCP call | read `cloudId` from `jira.credentialsFile`; with neither, call `<jira.mcpPrefix>getAccessibleAtlassianResources` |
 | `jira.credentialsFile` | where `cloudId` is read when `jira.cloudId` is absent | skip that read |
@@ -94,7 +94,7 @@ For a code-related finding, spawn ONE subagent (Agent tool, `Explore` or `genera
    A ticket that exists outside its epic's plan is drift — the Jira parent link alone is not enough, because every `/epic-*` skill reads the wave plan for ordering. This step used to be conditional and silently skipped on wave-plan epics; it is now unconditional.
 6. **Transition** — `getTransitionsForJiraIssue(cloudId, KEY)`; pick the transition whose target status name is `<jira.createStatus>` and apply it (`transitionJiraIssue`). Never guess the id — it varies by project. ⚠️ Projects create in **`Backlog`** by default, so a skipped or failed transition leaves the ticket invisible to `/giga-workflow:epic-next`'s JQL. If there's no `<jira.createStatus>` transition, say so loudly in the report rather than leaving it as a footnote.
 7. **Stub** — `python3 <plans.script> stub <KEY>`.
-8. **Commit (plans repo — commit only, do NOT push: when `plans.autoPush` is true the repo auto-commits + auto-pushes itself, so never report it as unpushed; otherwise report it as unpushed):**
+8. **Commit the plans repo.** With `plans.autoPush` true the repo pushes itself: commit only, and never report the commit as unpushed. With it false or absent, run `git push` right after the commit:
    ```bash
    cd <plans.repo> && git add <board>/<KEY>.md <board>/assets/<KEY> <board>/<epicKey>.md && \
    git commit -m "docs(<board>): <KEY> <short summary>"   # + the session's standard co-author trailer
@@ -198,4 +198,4 @@ summary: "<summary>"
 - No screenshot supplied → omit the Evidence section (don't fabricate one).
 - `createJiraIssue` custom-field error → retry with a minimal payload; if it persists, report and leave no orphan file.
 - Transition step fails → the ticket exists but is stranded in `Backlog`, where `/giga-workflow:epic-next` will never pick it up. Continue, but report it as a **warning line**, not a footnote: `⚠ <KEY> is still Backlog — transition it to <jira.createStatus>`.
-- This skill never pushes and never touches app code.
+- This skill never touches app code. Its only push is the plans repo's, when `plans.autoPush` is false or absent (Step 8).

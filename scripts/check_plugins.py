@@ -83,12 +83,13 @@ def broken_refs(plugin_dir: Path) -> list[str]:
     return found
 
 
-def bare_names(plugin_dir: Path, owner: dict[str, str]) -> list[str]:
-    """List each line that names a skill or agent without its plugin prefix."""
+def bare_names(tree: Path, owner: dict[str, str], base: Path | None = None) -> list[str]:
+    """List each line under tree that names a skill or agent without its plugin prefix, by its path from base (default: the tree's parent)."""
+    base = base or tree.parent
     found = []
-    for path in sorted(plugin_dir.rglob("*.md")):
+    for path in [tree] if tree.is_file() else sorted(tree.rglob("*.md")):
         text = path.read_text(errors="replace")
-        where = path.relative_to(plugin_dir.parent)
+        where = path.relative_to(base)
         for n, line in enumerate(text.splitlines(), 1):
             if namespace(line, owner) == line:
                 continue
@@ -98,6 +99,11 @@ def bare_names(plugin_dir: Path, owner: dict[str, str]) -> list[str]:
         if path.parent.name == "agents" and namespace_preloads(text, owner) != text:
             found.append(f"{where}:1: bare preloaded skill in front matter")
     return found
+
+
+def published_bare_names(root: Path, owner: dict[str, str]) -> list[str]:
+    """List the bare names in every published path under root that exists, by its path from root."""
+    return [x for rel in PUBLISHED if (root / rel).exists() for x in bare_names(root / rel, owner, root)]
 
 
 def report(heading: str, problems: list[str]) -> None:
@@ -112,13 +118,13 @@ def main() -> int:
 
     leaked = published_leaks(ROOT, FORBIDDEN)
     broken = {p.name: broken_refs(p) for p in plugins}
-    bare = {p.name: bare_names(p, owner) for p in plugins}
+    bare = published_bare_names(ROOT, owner)
 
     failed = False
     for heading, problems in (
         ("Private content", leaked),
         ("A skill reads a file outside its plugin", [x for v in broken.values() for x in v]),
-        ("A skill or agent is named without its plugin prefix", [x for v in bare.values() for x in v]),
+        ("A skill or agent is named without its plugin prefix", bare),
     ):
         if problems:
             report(heading, problems)

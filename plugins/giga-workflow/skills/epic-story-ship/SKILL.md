@@ -32,6 +32,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | Field | Used for | When absent |
 | --- | --- | --- |
 | `plans.script` | the script behind `stub` and `board` (composition step 5, amendment C2) | stop and say the repo has no `plans.script` in `.claude/giga/config.json` |
+| `plans.autoPush` | whether the plans repo pushes its own commits (amendment A4) | push the plans commit right after making it |
 | `git.mainBranch` | the branch the PR merges into and local sync targets | `main` |
 | `git.branchPrefix` | the story branch prefix the refusal check expects | `feat/` |
 | `git.mergeMethod` | the `gh pr merge` method flag (`squash`, `merge` or `rebase`) in amendment M1 | `squash` |
@@ -119,7 +120,7 @@ The stale siblings and new-story recommendations print under the block's existin
 
 **A3 — Step 8 comment: post it after the merge, headed `Merged`.** Same ADF shape with two changes — the heading text is `Merged`, and the `Commit:` paragraph names the **merge commit on `<git.mainBranch>`** (the `sha` from the merge chain's verification read), not the branch commit: `Commit: <merge-sha> on <git.mainBranch> (epic <config.epicKey>).` The PR paragraph is unchanged. Posting it before the merge would record a state the ticket left seconds later.
 
-**A4 — Step 10(d): one plans-repo commit for the whole run.** It also carries `/giga-workflow:post-merge-cleanup`'s wave-plan edit (amendment C3) and the audit's sibling edits (amendment E2). Subject: `docs(<board>): <KEY> shipped` when there are no follow-ups, `docs(<board>): <KEY> shipped + follow-ups <NEW-KEYS>` when there are; append ` · audit <SIBLING-KEYS>` when sibling edits landed. The push rules in that step are unchanged — commit only; the repo pushes itself.
+**A4 — Step 10(d): one plans-repo commit for the whole run.** It also carries `/giga-workflow:post-merge-cleanup`'s wave-plan edit (amendment C3) and the audit's sibling edits (amendment E2). Subject: `docs(<board>): <KEY> shipped` when there are no follow-ups, `docs(<board>): <KEY> shipped + follow-ups <NEW-KEYS>` when there are; append ` · audit <SIBLING-KEYS>` when sibling edits landed. Push it by that step's rule: with `plans.autoPush` true the repo pushes itself, so commit only; with it false or absent, push right after the commit.
 
 **A5 — Step 11 notification body:** `'<KEY> · story shipped — PR #<N> merged + Done'`. Same `<KEY> · <task>` format, same handoff file, same one-ping rule.
 
@@ -213,7 +214,7 @@ Outcome:   <board>/<KEY>.md § Outcome ✓ (<N> pin(s)) | nothing pinned
 Wave plan: <config.epicKey> — <KEY> Wave <N> → Shipped ✓
 Epic:      <EPIC-KEY> → Done (last story shipped) | <N> children still open
 Audit:     <K> sibling edit(s) applied — <SIBLING-KEYS> | <Z> skipped (<why>) | none stale | skipped (--no-audit | opt-out) | failed — <reason>
-Plans:     committed (auto-sync pushes it)
+Plans:     committed · pushed | committed (the repo pushes itself)
 Secrets:   <domain repo> <sha> pushed | clean | NOT pushed — <reason> · <secrets.sharedRepo> <same>
 Storybook: <the script's own output lines>
 

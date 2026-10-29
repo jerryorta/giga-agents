@@ -13,8 +13,10 @@ The keys sit under `workflow` in `.claude/giga/config.json`.
 | `plans.repo` | the plans repo's checkout | most skills stop and say so; a few skip the steps that need it |
 | `plans.script` | the script | most skills stop and say so; a few skip the steps that need it |
 | `plans.guide` | an optional guide in the plans repo, which the skills point to for its rules | the skills follow their own steps |
-| `plans.autoPush` | `true` when the plans repo commits and pushes itself (a hook or a timer) | the skills commit, then push or report the commit as unpushed |
+| `plans.autoPush` | `true` when the plans repo commits and pushes itself (a hook or a timer) | the skills push right after each plans-repo commit |
 | `jira.credentialsFile` | the file the script authenticates from | the script's own default |
+
+One push rule holds for every skill that commits the plans repo. With `plans.autoPush` true the repo pushes itself, so the skill commits and never pushes, and never reports the commit as unpushed. With it false or absent, the skill pushes right after its commit.
 
 The skills never pass credentials to the script; it authenticates itself. `/giga-workflow:create-jira` also reads `cloudId` from `jira.credentialsFile` when `jira.cloudId` is absent, so that file is a JSON object with a `cloudId` key.
 
@@ -162,22 +164,22 @@ Every plan file has these (an epic's own file has no `epic`), and a file `ensure
 
 | Key | Value |
 | --- | --- |
-| `jira` | the ticket's key |
-| `project` | the Jira project key |
-| `board` | the board folder |
-| `type` | the issue type; `/giga-workflow:create-jira` writes `bug`, `task` or `story` |
-| `epic` | the parent epic's key, on a child only; the epic's own file has none. `/giga-workflow:post-merge-cleanup` finds a story's epic with `grep -m1 '^epic:'` |
-| `summary` | the title, quoted. `/giga-workflow:epic-plan` reads an epic's summary here to name its branch |
+| `jira:` | the ticket's key |
+| `project:` | the Jira project key |
+| `board:` | the board folder |
+| `type:` | the issue type; `/giga-workflow:create-jira` writes `bug`, `task` or `story` |
+| `epic:` | the parent epic's key, on a child only; the epic's own file has none. `/giga-workflow:post-merge-cleanup` finds a story's epic with `grep -m1 '^epic:'` |
+| `summary:` | the title, quoted. `/giga-workflow:epic-plan` reads an epic's summary here to name its branch |
 
 These are optional. The owner sets them by hand. `/giga-workflow:epic-plan` may also set `model` and `crossActor` on a story it cuts, and writes `blocked_by` on an epic or a story that waits on another epic:
 
 | Key | Read by | Value |
 | --- | --- | --- |
-| `effort` | `/giga-workflow:epic-next`, `/giga-workflow:epic-merge-pr` | the `/effort` level recommended for the story; the skills report it and never apply it |
-| `model` | `/giga-workflow:epic-loop` | `sonnet`, `opus` or `haiku` for the story's agent; beats `--model` and `loop.storyModel` |
-| `crossActor` | `/giga-workflow:epic-loop` | `false`, `true`, or a scenario string; on a board with `hybridMode: "conditional"` it decides whether the story needs a cross-actor test, and the triage agent reports it instead of judging |
-| `blocked_by` | `/giga-workflow:epic-next`, `/giga-workflow:epic-loop` | `[<KEY>, …]` on the epic when the whole epic waits, or on a story when only it waits; the work waits until each key is Done |
-| `loop` | `/giga-workflow:epic-loop` | `manual`: the run stops before this story, and the owner runs it by hand |
+| `effort:` | `/giga-workflow:epic-next`, `/giga-workflow:epic-merge-pr` | the `/effort` level recommended for the story; the skills report it and never apply it |
+| `model:` | `/giga-workflow:epic-loop` | `sonnet`, `opus` or `haiku` for the story's agent; beats `--model` and `loop.storyModel` |
+| `crossActor:` | `/giga-workflow:epic-loop` | `false`, `true`, or a scenario string; on a board with `hybridMode: "conditional"` it decides whether the story needs a cross-actor test, and the triage agent reports it instead of judging |
+| `blocked_by:` | `/giga-workflow:epic-next`, `/giga-workflow:epic-loop` | `[<KEY>, …]` on the epic when the whole epic waits, or on a story when only it waits; the work waits until each key is Done |
+| `loop:` | `/giga-workflow:epic-loop` | `manual`: the run stops before this story, and the owner runs it by hand |
 
 ### Body headings
 
@@ -192,7 +194,7 @@ The rest of the body is free Markdown. These are the headings the skills find by
 | `## UX decisions for the owner` | story, and one list on the epic | `/giga-workflow:jira` in an unattended run | the owner |
 | `## Epic review — <YYYY-MM-DD>` | epic | `/giga-workflow:epic-review` | `/giga-workflow:epic-review` on a re-run; `/giga-workflow:epic-plan` before the next epic |
 | `## Refactor (in place)` | story | `/giga-workflow:jira` | `/giga-workflow:epic-story-complete`, which commits the listed files first |
-| `## Ideas for the Idea Board` | story | no skill names it: `/giga-workflow:jira` leaves ideas that could not reach the Idea Board in the plan file, so put them under this heading | `/giga-workflow:epic-review`, which posts them |
+| `## Ideas for the Idea Board` | story | `/giga-workflow:jira` and a `/giga-workflow:epic-loop` story agent, for an idea that meets the entry threshold but cannot be written to the board (no `ideas.board`, or no `ArtifactData` in that context); a note that fails the threshold never goes here | `/giga-workflow:epic-review`, which posts them |
 | `## Outcome — shipped (PR #<N>)`, with a `### Pinned` list | story | `/giga-workflow:epic-story-complete` | `/giga-workflow:epic-story-complete`, which adds to it on a re-run |
 
 Write the wave plan as `## Wave Plan`. `section` also matches `## Wave plan`, `## Waves` and `## Wave order`, but `/giga-workflow:epic-plan` and `/giga-workflow:epic-merge-pr` look for `## Wave Plan` by name.

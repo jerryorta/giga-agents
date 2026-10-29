@@ -19,7 +19,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `docs.constraints` | the authoritative standards doc (§4, §6.3) | skip that tier-3 source and that conflict test |
 | `docs.antiPatterns` | the anti-pattern list searched in tier 3 (§6.3) | skip that source |
 | `ideas.policy` (top level) | the Idea Board entry threshold and match check (§4) | ideas stay a plans-file note and are never written to a board |
-| `ideas.board` (top level) | where qualifying ideas are written (§4) | ideas stay a plans-file note |
+| `ideas.board` (top level) | where qualifying ideas are written (§4) | a qualifying idea goes in the story's plan file under `## Ideas for the Idea Board` |
 | `loop.neverUnattended` | the repo-specific classes that always escalate (§5) | only the generic classes below apply |
 | `loop.decisionSkills.chart` | the skill that owns chart decisions (§6.2) | go to §6.3 for a chart decision |
 | `loop.decisionSkills.accessibility` | the skill that owns accessibility-selector decisions (§6.2) | go to §6.3 for that decision |
@@ -28,7 +28,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `browser.renderingFiles` | the regex for files that render UI (§7, §8) | treat every changed file as rendering: `not-applicable` is never allowed |
 | `plans.repo` | the plans repo whose commits §6.6 covers | skip §6.6 |
 | `plans.guide` | the plans guide that settles the repo's sync convention (§6.6) | skip the pointer |
-| `plans.autoPush` | whether the plans repo pushes itself (§6.6) | commit the plans repo and say in the report that it was not pushed |
+| `plans.autoPush` | whether the plans repo pushes itself (§6.6) | push the plans repo right after each commit |
 | `notify` | the notification command the orchestrator owns (quick reference) | nothing to avoid |
 
 ---
@@ -97,7 +97,10 @@ PR on `<git.mainBranch>`.
 
 The same goes for scope you notice: build the story as written. A new idea — yours, a reviewer's, or
 the UX review's New scope — is an Idea Board entry (`ideas.board`) only when it meets the entry threshold (`ideas.policy` § Entry threshold) and no open ticket or entry of any status matches it (§ Check for a match first; a match is "covered by <key or id>" in the plans file), otherwise a plans-file note;
-never a slice, a branch or a story. A finding in what this story built is never an idea: fix it here. Report how many you wrote in the §8 `ideas` field.
+never a slice, a branch or a story. An entry that qualifies but cannot be written — no `ideas.board`, or
+no `ArtifactData` in your context — goes in the story's plan file under `## Ideas for the Idea Board`,
+where `/giga-workflow:epic-review` posts it; a note that fails the threshold never goes under that
+heading. A finding in what this story built is never an idea: fix it here. Report how many you wrote in the §8 `ideas` field.
 
 ## 5. Escalate, do not improvise
 
@@ -209,7 +212,7 @@ The same applies to the `/giga-workflow:jira` Phase 6 gate — build, typecheck,
 hand, not merely started, before you proceed — and to its Phase 6.5 UX review, whose verdict must
 be in hand with every severity-2+ finding fixed, every severity-1 `story` finding fixed in place, and no screen `owed`.
 
-**UX recommendations are never yours to act on.** A recommended cut, a `Remove` verdict, an `existing` finding or a rewording of a string this story did not write is recorded for the owner (plans file and Idea Board), never built, removed or rewritten. Build the story as written.
+**UX recommendations are never yours to act on.** A recommended cut, a `Remove` verdict, an `existing` finding or a rewording of a string this story did not write is recorded for the owner (plans file, and the Idea Board by §4), never built, removed or rewritten. Build the story as written.
 
 **The UX review may veto this story's own work, and you get one revision.** If the re-review after that one revision still
 fails, or its Outcome is `Stop for the owner`, return `NEEDS_HUMAN` with the reviewer's question as a
@@ -224,17 +227,17 @@ Two corollaries, both learned the expensive way:
   authorization to cut short an independent review. A reviewer that refuses you is behaving
   correctly; treat the refusal as a signal to wait, not to push harder.
 
-### 6.6 — Commit the plans repo, never push it
+### 6.6 — Commit the plans repo; push it only when it does not push itself
 
-Plans-repo work (`plans.repo`) is committed but never pushed **by you**. With `plans.autoPush` true the
-repo pushes itself — a commit, rebase and push on the Claude Code `Stop` hook at turn end and on a
-periodic timer (the plans guide, `plans.guide`, describes it) — and a manual push only races that
-rebase, for no gain. This is settled convention, stated in `/giga-workflow:epic-story-complete` and
-`/giga-workflow:post-merge-cleanup` alike; it is not a per-story judgement call. With `plans.autoPush` absent or
-false, commit and say in the report that the plans commits were not pushed.
+Plans-repo work (`plans.repo`) is committed. With `plans.autoPush` true the repo pushes itself — a
+commit, rebase and push on the Claude Code `Stop` hook at turn end and on a periodic timer (the plans
+guide, `plans.guide`, describes it) — so never push it: a manual push only races that rebase, for no
+gain. With `plans.autoPush` absent or false, push right after each commit. This is one rule, stated in
+`/giga-workflow:epic-story-complete` and `/giga-workflow:post-merge-cleanup` alike; it is not a
+per-story judgement call.
 
-Say in your report which plans commits you made. ⚠️ **Do NOT describe them as "unpushed" and do NOT
-tell the user to push them** — with `plans.autoPush` true they reach the remote within minutes, usually
+Say in your report which plans commits you made. ⚠️ **With `plans.autoPush` true, do NOT describe them
+as "unpushed" and do NOT tell the user to push them** — they reach the remote within minutes, usually
 the instant your turn ends, so that instruction is simply wrong. If a report genuinely needs the
 sync state, measure it: `git -C <plans.repo> rev-list --left-right --count HEAD...@{u}`.
 

@@ -178,6 +178,68 @@ class PublishedLeaksTest(unittest.TestCase):
             self.assertEqual(err.getvalue(), "Private content:\n  docs/plans-repo.md:1: matches '/Users/'\n")
 
 
+class PublishedBareNamesTest(unittest.TestCase):
+    def tree(self, tmp: str, docs: str = "Intro.\n", readme: str = "Intro.\n") -> Path:
+        write(Path(tmp, "plugins/giga-workflow/skills/jira/SKILL.md"), "Intro.\n")
+        write(Path(tmp, "docs/guide.md"), docs)
+        write(Path(tmp, "README.md"), readme)
+        return Path(tmp)
+
+    def main_stderr(self, root: Path) -> tuple[int, str]:
+        err = io.StringIO()
+        with mock.patch.object(check, "ROOT", root), contextlib.redirect_stderr(err):
+            code = check.main()
+        return code, err.getvalue()
+
+    def test_reports_a_bare_name_under_docs_by_its_repo_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp, docs="Intro.\nThen run /jira ABC-1.\n")
+            self.assertEqual(check.published_bare_names(root, OWNER), ["docs/guide.md:2: bare jira"])
+
+    def test_reports_a_bare_name_in_the_readme_by_its_repo_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp, readme="Dispatch `ux-reviewer`.\n")
+            self.assertEqual(check.published_bare_names(root, OWNER), ["README.md:1: bare ux-reviewer"])
+
+    def test_reports_plugins_by_their_repo_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp)
+            write(root / "plugins/giga-workflow/skills/a/SKILL.md", "Then /epic-next arch.\n")
+            self.assertEqual(check.published_bare_names(root, OWNER),
+                             ["plugins/giga-workflow/skills/a/SKILL.md:1: bare epic-next"])
+
+    def test_reports_a_bare_preload_by_its_repo_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp)
+            write(root / "plugins/giga-workflow/agents/a.md", "---\nname: a\nskills:\n  - ux-design\n---\n")
+            self.assertEqual(check.published_bare_names(root, OWNER),
+                             ["plugins/giga-workflow/agents/a.md:1: bare preloaded skill in front matter"])
+
+    def test_skips_a_missing_docs_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/giga-workflow/skills/jira/SKILL.md"), "Intro.\n")
+            write(Path(tmp, "README.md"), "Intro.\n")
+            self.assertEqual(check.published_bare_names(Path(tmp), OWNER), [])
+
+    def test_passes_namespaced_names_in_docs_and_the_readme(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text = "Run /giga-workflow:jira, then dispatch `giga-ux:ux-reviewer`.\n"
+            root = self.tree(tmp, docs=text, readme=text)
+            self.assertEqual(check.published_bare_names(root, OWNER), [])
+
+    def test_main_fails_on_a_bare_name_under_docs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp, docs="Then run /jira ABC-1.\n")
+            self.assertEqual(self.main_stderr(root), (
+                1, "A skill or agent is named without its plugin prefix:\n  docs/guide.md:1: bare jira\n"))
+
+    def test_main_fails_on_a_bare_name_in_the_readme(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp, readme="Intro.\nRun `jira` first.\n")
+            self.assertEqual(self.main_stderr(root), (
+                1, "A skill or agent is named without its plugin prefix:\n  README.md:2: bare jira\n"))
+
+
 class RefsTest(unittest.TestCase):
     REF = "Read ${CLAUDE_SKILL_DIR}/../y/ref.md first.\n"
 
@@ -208,10 +270,7 @@ class RefsTest(unittest.TestCase):
 
 class PublishedTreeTest(unittest.TestCase):
     def test_no_bare_names(self):
-        owner = check.owners(PLUGINS)
-        for plugin in real_plugins():
-            with self.subTest(plugin=plugin.name):
-                self.assertEqual(check.bare_names(plugin, owner), [])
+        self.assertEqual(check.published_bare_names(REPO, check.owners(PLUGINS)), [])
 
     def test_no_leaks(self):
         self.assertEqual(check.published_leaks(REPO, FORBIDDEN), [])

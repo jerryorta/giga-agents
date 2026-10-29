@@ -74,7 +74,7 @@ Append to `$epicPath`, one line per item:
 - Ideas posted: add <n> · cut <n> · fix <n> — <ideas.board>
 ```
 
-When `plans.autoPush` is true the plans repo commits and pushes itself; never push it by hand.
+When `plans.autoPush` is true the plans repo commits and pushes itself; never push it by hand. When it is false or absent, commit the epic's plan file (`docs(<board>): <EPIC-KEY> epic review`) and push it right after.
 
 ## Step 6 — Report
 
