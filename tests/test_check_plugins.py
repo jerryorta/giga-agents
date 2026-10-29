@@ -38,6 +38,11 @@ def write(path: Path, text: str) -> Path:
     return path
 
 
+def page(*targets: str) -> str:
+    """A plugin page whose table has one row linking each target."""
+    return "| Skill | Use it to |\n| --- | --- |\n" + "".join(f"| [x]({t}) | y |\n" for t in targets)
+
+
 def real_plugins() -> list[Path]:
     return sorted(p for p in PLUGINS.iterdir() if p.is_dir())
 
@@ -170,6 +175,7 @@ class PublishedLeaksTest(unittest.TestCase):
     def test_main_fails_on_a_sample_under_docs(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "Intro.\n")
+            write(Path(tmp, "plugins/a/README.md"), page("skills/x/SKILL.md"))
             write(Path(tmp, "docs/plans-repo.md"), "cd /Users/someone/Dev/app\n")
             write(Path(tmp, "README.md"), "Intro.\n")
             err = io.StringIO()
@@ -181,6 +187,7 @@ class PublishedLeaksTest(unittest.TestCase):
 class PublishedBareNamesTest(unittest.TestCase):
     def tree(self, tmp: str, docs: str = "Intro.\n", readme: str = "Intro.\n") -> Path:
         write(Path(tmp, "plugins/giga-workflow/skills/jira/SKILL.md"), "Intro.\n")
+        write(Path(tmp, "plugins/giga-workflow/README.md"), page("skills/jira/SKILL.md"))
         write(Path(tmp, "docs/guide.md"), docs)
         write(Path(tmp, "README.md"), readme)
         return Path(tmp)
@@ -294,6 +301,7 @@ class ArgRefsTest(unittest.TestCase):
     def test_main_fails_on_a_digit_after_a_dollar_in_a_skill(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "awk '{print $0}'\n")
+            write(Path(tmp, "plugins/a/README.md"), page("skills/x/SKILL.md"))
             write(Path(tmp, "README.md"), "Intro.\n")
             err = io.StringIO()
             with mock.patch.object(check, "ROOT", Path(tmp)), contextlib.redirect_stderr(err):
@@ -301,6 +309,69 @@ class ArgRefsTest(unittest.TestCase):
             self.assertEqual(err.getvalue(),
                              "A skill or agent body holds `$<digit>`, which Claude Code replaces with an argument:\n"
                              f"  plugins/a/skills/x/SKILL.md:1: matches {check.ARG!r}\n")
+
+
+class UnlistedTest(unittest.TestCase):
+    def check(self, files: dict[str, str]) -> list[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            for rel, text in files.items():
+                write(Path(tmp, "plugins/giga-ux", rel), text)
+            return check.unlisted(Path(tmp, "plugins/giga-ux"), Path(tmp))
+
+    def test_passes_a_row_for_every_skill_and_agent(self):
+        self.assertEqual(self.check({
+            "skills/ux-design/SKILL.md": "x",
+            "agents/ux-reviewer.md": "x",
+            "README.md": page("skills/ux-design/SKILL.md", "agents/ux-reviewer.md"),
+        }), [])
+
+    def test_passes_a_row_that_links_an_anchor(self):
+        self.assertEqual(self.check({
+            "skills/ux-design/SKILL.md": "x",
+            "README.md": page("skills/ux-design/SKILL.md#project-config"),
+        }), [])
+
+    def test_flags_a_skill_with_no_row(self):
+        self.assertEqual(self.check({
+            "skills/ux-design/SKILL.md": "x",
+            "agents/ux-reviewer.md": "x",
+            "README.md": page("agents/ux-reviewer.md"),
+        }), ["plugins/giga-ux/README.md: no row for giga-ux:ux-design"])
+
+    def test_flags_an_agent_with_no_row(self):
+        self.assertEqual(self.check({
+            "skills/ux-design/SKILL.md": "x",
+            "agents/ux-reviewer.md": "x",
+            "README.md": page("skills/ux-design/SKILL.md"),
+        }), ["plugins/giga-ux/README.md: no row for giga-ux:ux-reviewer"])
+
+    def test_flags_a_skill_linked_only_in_prose(self):
+        self.assertEqual(self.check({
+            "skills/ux-design/SKILL.md": "x",
+            "README.md": "See [its config](skills/ux-design/SKILL.md#project-config).\n" + page(),
+        }), ["plugins/giga-ux/README.md: no row for giga-ux:ux-design"])
+
+    def test_flags_every_skill_and_agent_without_a_page(self):
+        self.assertEqual(self.check({"skills/ux-design/SKILL.md": "x", "agents/ux-reviewer.md": "x"}), [
+            "plugins/giga-ux/README.md: no row for giga-ux:ux-design",
+            "plugins/giga-ux/README.md: no row for giga-ux:ux-reviewer",
+        ])
+
+    def test_passes_a_plugin_with_no_skills_or_agents(self):
+        self.assertEqual(self.check({"hooks/hooks.json": "{}"}), [])
+
+    def test_main_fails_on_a_skill_with_no_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp, "plugins/a/skills/x/SKILL.md"), "Intro.\n")
+            write(Path(tmp, "plugins/a/skills/y/SKILL.md"), "Intro.\n")
+            write(Path(tmp, "plugins/a/README.md"), page("skills/x/SKILL.md"))
+            write(Path(tmp, "README.md"), "Intro.\n")
+            err = io.StringIO()
+            with mock.patch.object(check, "ROOT", Path(tmp)), contextlib.redirect_stderr(err):
+                self.assertEqual(check.main(), 1)
+            self.assertEqual(err.getvalue(),
+                             "A skill or agent has no row on its plugin's page:\n"
+                             "  plugins/a/README.md: no row for a:y\n")
 
 
 class PublishedTreeTest(unittest.TestCase):
@@ -312,6 +383,9 @@ class PublishedTreeTest(unittest.TestCase):
 
     def test_no_arg_refs(self):
         self.assertEqual(check.arg_refs(PLUGINS, REPO), [])
+
+    def test_every_skill_and_agent_has_a_row(self):
+        self.assertEqual([x for p in real_plugins() for x in check.unlisted(p, REPO)], [])
 
 
 if __name__ == "__main__":

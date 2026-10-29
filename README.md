@@ -4,10 +4,12 @@ Claude Code plugins for product, UX and delivery workflows, built and run every 
 
 | Plugin | What it does |
 | --- | --- |
-| `giga-ux` | UX architecture and review. A `giga-ux:ux-design` skill plus three subagents: `giga-ux:ux-architect` wireframes a feature before its visual design, `giga-ux:ux-reviewer` reviews it in the running app after it is built, and `giga-ux:ux-blind-user` answers blind first-click and expectation tests with no access to the code. |
-| `giga-workflow` | A Jira epic workflow in 15 skills. `/giga-workflow:epic-plan` cuts an epic into conflict-minimising waves; `/giga-workflow:epic-next` + `/giga-workflow:jira` take one story from ticket to plan to code; `/giga-workflow:epic-story-complete`, `/giga-workflow:epic-merge-pr` and `/giga-workflow:epic-story-ship` commit, open, merge and close it; `/giga-workflow:epic-loop` runs a whole board unattended, one agent per story, pausing only for what needs a human. Around them: `/giga-workflow:epic-config`, `/giga-workflow:epic-evolution-audit`, `/giga-workflow:epic-review`, `/giga-workflow:create-jira`, `/giga-workflow:post-merge-cleanup`, `/giga-workflow:epic-cross-actor-test`, `/giga-workflow:dev-server` and `/giga-workflow:clean-exit`. |
-| `giga-angular` | Seven Angular skills that take your repo's conventions from config. `/giga-angular:create-storybook` writes a component's four-file story set inside your Storybook review container, shaped like your example stories; `/giga-angular:ngrx-component-state` decides where each piece of a component's state belongs and builds its colocated NgRx SignalStore, laid out like your reference stores; `/giga-angular:ngrx-global-store` authors a global `@ngrx/store` slice; `/giga-angular:new-domain` scaffolds a domain's app and library set with Nx generators; `/giga-angular:verify-theming` and `/giga-angular:verify-accessibility` check and fix a file's theme tokens, accessible names and test selectors; `/giga-angular:promote-component` moves a component into a shared or domain design library. |
-| `giga-standards` | Write-time coding standards. A `PreToolUse` hook that, when an agent writes a file (with Write, Edit or MultiEdit, or a Bash command that writes a source file), injects the constraints sections, anti-patterns, standards fragments, library-type standard and nearest `AGENTS.md` that govern it: routed by a table in your repo's config, under a size budget, once per agent context. |
+| [`giga-ux`](plugins/giga-ux/README.md) | UX architecture and review, in one skill and three agents. Wireframe a feature, page or flow before its visual design, review it in the running app once it is built, and test its labels on someone who has never seen the app. |
+| [`giga-workflow`](plugins/giga-workflow/README.md) | A Jira epic workflow in 15 skills. Plan an epic into waves, take one story at a time from ticket to merged pull request, or run a whole board unattended. |
+| [`giga-angular`](plugins/giga-angular/README.md) | Seven Angular skills that take your repo's conventions from config. They write Storybook stories, place component and global state, scaffold a domain, check theming and accessibility, and promote a component to a shared library. |
+| [`giga-standards`](plugins/giga-standards/README.md) | Write-time coding standards. When an agent writes a file, a hook injects the constraints sections, anti-patterns, standards fragments, library-type standard and nearest `AGENTS.md` that govern it, routed by a table in your repo's config. |
+
+Each plugin's page says what it needs, what it does with an empty config, and when to use each skill and agent.
 
 ## Install
 
@@ -37,13 +39,71 @@ To enable them for everyone working in a repo, commit this to the repo's `.claud
 
 Components are namespaced by the plugin: `/giga-ux:ux-design`, the agents `giga-ux:ux-architect`, `giga-ux:ux-reviewer` and `giga-ux:ux-blind-user`, `/giga-workflow:epic-next`, `/giga-angular:create-storybook` and so on. Where config names a skill (`ux.devServerSkill`, `workflow.epicCloseSkill`), use the namespaced name, e.g. `giga-workflow:dev-server`.
 
+## Quickstart
+
+The epic workflow runs on two files in your repo and three commands. It also needs Jira, through an MCP connector, and a plans repo: a git repo of Markdown files, one per ticket, with a script the skills call to read and write them. [The plans repo](docs/plans-repo.md) is the script's contract.
+
+1. **Write `.claude/giga/config.json`.** This is the least the epic workflow runs on:
+
+   ```json
+   {
+     "workflow": {
+       "plans": { "repo": "~/plans", "script": "~/plans/scripts/plans.py" },
+       "jira": { "mcpPrefix": "mcp__claude_ai_Atlassian__" },
+       "checks": { "gate": "npm run verify" }
+     }
+   }
+   ```
+
+   Without `plans.repo` or `plans.script`, the epic skills stop and name the missing field. Without `jira.mcpPrefix`, `/giga-workflow:jira` and the ship step stop, and `/giga-workflow:epic-plan` creates no stories in Jira. [The plans repo § Config](docs/plans-repo.md#config) covers the `plans` keys. `mcpPrefix` is the start of your Jira connector's tool names; [Per-repo config](#per-repo-config) says how to find yours. `checks.gate` is the command that builds, lints and tests your code; without it, `/giga-workflow:jira` asks for the check commands on every story. Every other field has a default.
+
+2. **Get a board.** A board, `.claude/giga/epic.<board>.json`, names the epic being worked and the app, libraries and conventions its stories follow. For the epic `ABC-100`, `/giga-workflow:epic-plan` writes `.claude/giga/epic.abc.json`:
+
+   ```json
+   {
+     "name": "Inbox empty states",
+     "epicKey": "ABC-100",
+     "jql": "parent = ABC-100 AND status = \"To Do\"",
+     "storyOrdering": "epic-description",
+     "groupLabel": "Wave",
+     "completionMessage": "All ABC-100 stories are complete!",
+     "hybridMode": false,
+     "mergeMode": "pr",
+     "epicBranch": null,
+     "commitScope": "web",
+     "buildCommand": "npm run build",
+     "app": "apps/web",
+     "libraries": { "ui": "libs/web/ui", "store": "libs/web/store", "designLibrary": null },
+     "routingFiles": ["apps/web/src/app/app.routes.ts"],
+     "conventions": ["Every component has its own spec file"],
+     "designReferences": null,
+     "epicEvolutionRules": []
+   }
+   ```
+
+   The board comes from one of two places:
+
+   - **The plan run writes it.** A new board then asks for its app and library paths. With `workflow.boardTemplate` naming a starter board, the run seeds the new board from that file instead.
+   - **You write it first**, as `.claude/giga/epic.<board>.json` with `epicKey` set to the epic you are about to plan. `/giga-workflow:epic-plan` takes the board whose epic key shares the epic's prefix, keeps its app, libraries and conventions, and writes the epic's own fields.
+
+3. **Run the epic.**
+
+   ```
+   /giga-workflow:epic-plan ABC-100     once: cuts the epic into waves and writes the board
+   /giga-workflow:epic-next abc         once per story, in a new session; it hands the story to /giga-workflow:jira
+   /giga-workflow:epic-story-ship       after you review the diff: commit, pull request, merge, Done
+   ```
+
+   [The epic workflow](docs/workflow.md) covers the rest: what each command asks you, the other merge modes, and how an epic closes.
+
+## Guides
+
+- [The epic workflow](docs/workflow.md): an epic from `/giga-workflow:epic-plan` to Done, in the order you type the commands.
+- [The plans repo](docs/plans-repo.md): what the workflow reads and writes in your plans repo, and what its script must do.
+
 ## What `giga-workflow` expects
 
-- **Jira**, through the Atlassian MCP connector, for status: transitions, comments, new issues.
-- **A plans repo** holding each ticket's content as Markdown (`<board>/<KEY>.md`), with a script that implements `ensure <KEY>` (fetch a ticket to its file), `board --jql <jql>` (list a board's status), `section <KEY> <heading>` and `stub <KEY>`. Ticket content lives there rather than in Jira; Jira keeps status. The script is not part of this repo; its contract is in [docs/plans-repo.md](docs/plans-repo.md).
-- **Board configs**: one `.claude/giga/epic.<board>.json` per board (epic key, JQL, story order, commit scope, build command, app and libraries, conventions). `/giga-workflow:epic-plan` writes them and `/giga-workflow:epic-config` edits them. Each board picks a `mergeMode`: `pr` (the default) opens a pull request per story; `epic-branch` commits every story onto one epic branch that lands through one pull request; `direct` fast-forwards each story into the main branch and pushes it, with no pull request.
-- **GitHub** and the `gh` CLI for pull requests, which only `pr` boards and an epic-branch landing need.
-- `giga-ux`, for the UX phases of `/giga-workflow:jira` and for `/giga-workflow:epic-review`. Without it those phases are skipped.
+What the workflow needs, and what its skills do with an empty config, are on [the giga-workflow page](plugins/giga-workflow/README.md#what-it-needs).
 
 ## What `giga-standards` expects
 
@@ -289,7 +349,7 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
   },
   "workflow": {
     "plans": { "repo": "~/plans", "script": "~/plans/scripts/plans.py", "guide": "~/plans/AGENTS.md", "autoPush": false },
-    "jira": { "site": "<your Jira site>", "cloudId": "<cloud id>", "mcpPrefix": "mcp__atlassian__", "createStatus": "To Do" },
+    "jira": { "site": "<your Jira site>", "cloudId": "<cloud id>", "mcpPrefix": "mcp__claude_ai_Atlassian__", "createStatus": "To Do" },
     "git": { "mainBranch": "main", "branchPrefix": "feat/", "mergeMethod": "squash", "autoMerge": false, "hasCI": true },
     "commit": { "format": "<type>(<scope>): <KEY> <subject>", "scopeRules": "docs/commit-scopes.json", "hooks": true, "refactorCommitFirst": true },
     "checks": { "gate": "npm run verify", "affected": "npm run verify:affected", "single": "npm run <target> -w <project>", "antiPatterns": null },
@@ -336,8 +396,8 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 | `angular.theming` | the token-file and token-docs path patterns (with `<domain>` and `<prefix>`), the styling standards, banned token prefixes, and path-scoped variant skills `/giga-angular:verify-theming` hands files to |
 | `angular.accessibility` | `standards[]`: rule docs for `/giga-angular:verify-accessibility`, each applying to every file or only to files under its `match` globs, and winning over the skill's generic rules |
 | `angular.promote` | the shared library's path, prefix, alias and story-title group; each source domain's prefix and story-title group; the domain library path pattern; the placement doc; banned content; commit scope; the verify command |
-| `workflow.plans` | the plans repo, its script and guide; whether it pushes its own commits |
-| `workflow.jira` | the Jira site, cloud id, MCP tool prefix, and the status a ready story sits in |
+| `workflow.plans` | the plans repo and its script; each key, and what the skills do without it, is in [The plans repo § Config](docs/plans-repo.md#config) |
+| `workflow.jira` | the Jira site, cloud id, MCP tool prefix, and the status a ready story sits in. `mcpPrefix` is a Jira tool's full name without the tool's own name: the hosted Atlassian connector's `mcp__claude_ai_Atlassian__getJiraIssue` gives `mcp__claude_ai_Atlassian__`, and a server you added yourself gives `mcp__<its name>__`, with its name as `/mcp` lists it |
 | `workflow.git` · `workflow.commit` | base branch, branch prefix, merge method, auto-merge, CI; commit format and scope rules |
 | `workflow.checks` · `workflow.docs` | the build/lint/test gate and single-target command; the standards docs and `AGENTS.md` locations |
 | `workflow.devServers` · `workflow.devServerPrelude` · `workflow.storybook` | how to start each app and Storybook, and on which port |
@@ -352,7 +412,7 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 This repo is the only copy of the plugins. Two branches carry them: `beta`, held by its own worktree, is the live copy every repo on this machine runs, and `main` is the published copy. Neither is edited in place: each change is made and tried in a worktree of its own, off `beta`, before it lands there.
 
 1. Create the `beta` worktree once: `git worktree add ../giga-agents-beta -b beta`, and put a direnv `.envrc` above your repos that names its `plugins` dir: `path_add CLAUDE_CODE_PLUGIN_DIRS "$HOME/<path to the beta worktree>/plugins"`. For each change, add a worktree off `beta`: `git worktree add ../giga-agents-<name> -b <name> beta`. Work and commit there.
-2. Run `git config core.hooksPath .githooks` once per clone. Then `scripts/check.sh` gates every commit and push: `python3 -m unittest discover -s tests`, `scripts/check_plugins.py` and `claude plugin validate .`. `check_plugins.py` refuses private content (home paths, private emails, private links, token prefixes) in `plugins/`, `docs/` and this README, a skill that reads another plugin's file through `${CLAUDE_SKILL_DIR}`, a bare skill or agent name, and a `$` followed by a digit in a `SKILL.md` or agent body: Claude Code replaces it with the skill's argument, so a script that needs one (awk's `$0`) goes in a file under the skill's `scripts/`. Names in skills are written namespaced (`/giga-workflow:epic-next`, `giga-ux:ux-reviewer`), and hook files are never rewritten.
+2. Run `git config core.hooksPath .githooks` once per clone. Then `scripts/check.sh` gates every commit and push: `python3 -m unittest discover -s tests`, `scripts/check_plugins.py` and `claude plugin validate .`. `check_plugins.py` refuses private content (home paths, private emails, private links, token prefixes) in `plugins/`, `docs/` and this README, a skill that reads another plugin's file through `${CLAUDE_SKILL_DIR}`, a bare skill or agent name, and a `$` followed by a digit in a `SKILL.md` or agent body: Claude Code replaces it with the skill's argument, so a script that needs one (awk's `$0`) goes in a file under the skill's `scripts/`. It also refuses a skill or agent that no table row on its plugin's `README.md` links. Names in skills are written namespaced (`/giga-workflow:epic-next`, `giga-ux:ux-reviewer`), and hook files are never rewritten.
 3. Try the change in one session with `CLAUDE_CODE_PLUGIN_DIRS=<change worktree>/plugins claude`.
 4. Smoke-test each plugin as installed. Load it into a scratch repo whose config is empty and ask, read-only, what it sees. Run this from the change's worktree:
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Check the published tree: no private content, no broken cross-file reads, no bare skill or agent names,
-no `$<digit>` in a skill or agent body.
+no `$<digit>` in a skill or agent body, and a row on its plugin's page for every skill and agent.
 
 Usage: scripts/check_plugins.py
 Rules: README § How this repo is built.
@@ -114,6 +114,22 @@ def arg_refs(plugins_dir: Path, base: Path) -> list[str]:
     return [x for path in bodies for x in leaks(path, [ARG], base)]
 
 
+def unlisted(plugin_dir: Path, base: Path | None = None) -> list[str]:
+    """List each skill and agent that no table row of its plugin's README.md links, by the page's path from base (default: the plugins dir)."""
+    base = base or plugin_dir.parent
+    page = plugin_dir / "README.md"
+    lines = page.read_text(errors="replace").splitlines() if page.exists() else []
+    rows = [line for line in lines if line.lstrip().startswith("|")]
+    targets = [(p.parent.name, f"skills/{p.parent.name}/SKILL.md") for p in sorted(plugin_dir.glob("skills/*/SKILL.md"))]
+    targets += [(p.stem, f"agents/{p.name}") for p in sorted(plugin_dir.glob("agents/*.md"))]
+    found = []
+    for name, target in targets:
+        link = re.compile(rf"\]\({re.escape(target)}(#[^)]*)?\)")
+        if not any(link.search(row) for row in rows):
+            found.append(f"{page.relative_to(base)}: no row for {plugin_dir.name}:{name}")
+    return found
+
+
 def report(heading: str, problems: list[str]) -> None:
     print(f"{heading}:", file=sys.stderr)
     print("\n".join(f"  {p}" for p in problems), file=sys.stderr)
@@ -128,6 +144,7 @@ def main() -> int:
     broken = {p.name: broken_refs(p) for p in plugins}
     bare = published_bare_names(ROOT, owner)
     args = arg_refs(plugins_dir, ROOT)
+    rowless = [x for p in plugins for x in unlisted(p, ROOT)]
 
     failed = False
     for heading, problems in (
@@ -135,6 +152,7 @@ def main() -> int:
         ("A skill reads a file outside its plugin", [x for v in broken.values() for x in v]),
         ("A skill or agent is named without its plugin prefix", bare),
         ("A skill or agent body holds `$<digit>`, which Claude Code replaces with an argument", args),
+        ("A skill or agent has no row on its plugin's page", rowless),
     ):
         if problems:
             report(heading, problems)
