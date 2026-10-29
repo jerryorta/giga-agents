@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the plugins tree: no private content, no broken cross-file reads, no bare skill or agent names.
+"""Check the published tree: no private content, no broken cross-file reads, no bare skill or agent names.
 
 Usage: scripts/check_plugins.py
 Rules: README § How this repo is built.
