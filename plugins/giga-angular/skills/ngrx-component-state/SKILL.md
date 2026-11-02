@@ -32,6 +32,7 @@ Read every doc in `componentState.standards` before writing. Every store this sk
 - **Multi-component systems** (a root orchestrating a tree of children that share state / interaction): ONE store provided at the root; children `inject()` it. `input()` / `output()` stay ONLY at the root's public boundary — NEVER prop-drill shared state as `input()` nor bubble interactions as `output()` between internal components.
 - **State, not logic.** The store holds reactive UI state; derived view-models are `withComputed`; algorithms stay in **pure functions** the store calls.
 - **Supplements, never replaces, the global store.** The component SignalStore holds ephemeral local UI / interaction state; the global `@ngrx/store` (via facades/selectors) stays the system of record for app-/domain-wide persistent data, `@ngrx/entity`, and realtime / websocket subscriptions. A system typically runs BOTH. Never migrate a global slice into a component store, nor promote local UI state into the global store.
+- **Absence comes from the server-confirmed signal.** A store that decides an empty or absent state over a Firestore-backed global slice (an empty state, a zero or "(0)" count, "not found", "no … match", create-vs-open, "not covered") reads that slice's confirmed signal through its facade (e.g. `isConfirmedByServer$`), never its loaded flag or `length === 0` alone: a cached first snapshot can be empty while the server holds rows. Held rows render at once, without waiting. Until the slice confirms, the empty region shows its loading state, and only that region: offline never confirms. A facade with no confirmed signal is global-slice work (**Global path**).
 - **Exemption is by KIND, not size.** Design-library presentational primitives keep their intrinsic widget mechanics (CVA internals — a reveal/open toggle, hover/focus state) as plain component signals; zero-state components need no store. Don't force these into a SignalStore.
 
 ---
@@ -216,6 +217,7 @@ Rules while writing:
 2. `npx nx run <project>:test` — new specs pass.
 3. Type-check consumer sites: `inject(StoreName)` resolves cleanly.
 4. Component-scoped stores — confirm the component has `providers: [StoreName]` (DI fails at runtime with no compile error otherwise).
+5. Absence — search the store, its features and the template for empty states, `length === 0`, zero counts, "not found" and create-vs-open branches over a Firestore-backed slice: each reads the facade's confirmed signal, and a spec covers an empty cached snapshot showing the loading state, not the empty one.
 
 If refactoring, delete the dead local signals / effects after the store takes over.
 
@@ -225,7 +227,7 @@ If refactoring, delete the dead local signals / effects after the store takes ov
 
 When **Routing** sends a concern to the global store:
 
-1. **Slice + facade already exist** → inject the facade (in the component, or for a system in its container/root), read via its exposed signals, dispatch via its methods. Delete the component's duplicated or hand-hydrated copy of that global state. Children of a system `inject()` the facade — don't prop-drill it.
+1. **Slice + facade already exist** → inject the facade (in the component, or for a system in its container/root), read via its exposed signals, dispatch via its methods. Delete the component's duplicated or hand-hydrated copy of that global state. Children of a system `inject()` the facade — don't prop-drill it. An empty or absent state reads the slice's confirmed signal (**Standard**); a confirmation across parents or slices comes from a facade aggregate, never an AND of flags in this store.
 2. **Slice does not exist** → this is global-slice work. Stop and run the skill named in `globalStoreSkill` to author the slice (actions/reducer/effects/selectors/facade), then return here to wire the facade. With no `globalStoreSkill`, run `/giga-angular:ngrx-global-store`, then wire it.
 3. **Never** author actions / reducers / effects / selectors in this skill while `globalStoreSkill` names a skill — that boundary belongs to it.
 
@@ -246,6 +248,10 @@ Source-of-truth is the store. Form fields become `computed(() => store.field())`
 ### `effect(() => ...)` orchestration with multiple source signals → `rxMethod`
 
 If the effect reads multiple signals and dispatches side-effects on derived state, it's almost always cleaner as an `rxMethod` pipeline triggered by a source signal. Gives automatic cleanup, cancellation, RxJS operator composition.
+
+### `@if (rows().length === 0)` empty state → a three-state view model
+
+Over a Firestore-backed slice, `withComputed` derives `'rows' | 'loading' | 'empty'`: `'rows'` whenever rows are held, `'empty'` only when there are none and the facade's confirmed signal is true, `'loading'` otherwise. The template switches on it; the count and any "not found" read the same confirmation.
 
 ### `@ngrx/component-store` → `signalStore`
 

@@ -1,6 +1,6 @@
 ---
 name: ngrx-global-store
-description: Create or refactor a classic global `@ngrx/store` slice (actions, reducer, effects, selectors, facade) laid out like the repo's own store slices and registered where the repo registers them. Hybrid skill — authoritative API guidance comes from a local NgRx clone (kept current via `git pull`); layout, registration and backend conventions come from the repo's reference slices, with an optional Firestore section (realtime listeners, snapshot-authoritative writes, per-write state) for repos whose slices are fed by Firestore. Use when the user wants to add a global store slice, wire effects, introduce `@ngrx/entity`, integrate `@ngrx/router-store`, connect a realtime Firestore listener to state, or refactor an existing slice. Does NOT handle component-scoped SignalStore work or decide where a component's state belongs — `/giga-angular:ngrx-component-state` does.
+description: Create or refactor a classic global `@ngrx/store` slice (actions, reducer, effects, selectors, facade) laid out like the repo's own store slices and registered where the repo registers them. Hybrid skill — authoritative API guidance comes from a local NgRx clone (kept current via `git pull`); layout, registration and backend conventions come from the repo's reference slices, with an optional Firestore section (realtime listeners, a loaded and a server-confirmed signal per slice with every absence decision on the confirmed one, snapshot-authoritative writes, per-write state) for repos whose slices are fed by Firestore. Use when the user wants to add a global store slice, wire effects, introduce `@ngrx/entity`, integrate `@ngrx/router-store`, connect a realtime Firestore listener to state, or refactor an existing slice. Does NOT handle component-scoped SignalStore work or decide where a component's state belongs — `/giga-angular:ngrx-component-state` does.
 ---
 
 # NgRx Global Store
@@ -151,7 +151,7 @@ Read when setting up a new app's root store or debugging a specific slice. Addin
 
 ## Phase 3 — Read the reference slices
 
-Layout comes from the target store's own slices. With `globalStore.firestore` set, read `${CLAUDE_SKILL_DIR}/references/firestore.md` now: it adds invariants, files and patterns to this phase and the next.
+Layout comes from the target store's own slices. With `globalStore.firestore` set, read `${CLAUDE_SKILL_DIR}/references/firestore.md` now: it adds invariants, files and patterns to this phase and the next, and a verify list to Phase 5.
 
 1. **Pick the reference that matches the case.** Each `references` entry is a `{ path, note }`; the note says what the slice shows (a single record with writes, a collection, a collection under a parent, a write-only slice, the sign-out reset). With no clear match, read the first entry.
 2. **Read it before scaffolding**: its actions, reducer (or feature), effects and facade, and the spec beside each. Copy its conventions; don't reinvent them.
@@ -180,9 +180,9 @@ A store that combines reducer and selectors in one `<slice>.feature.ts` (`create
 
 ## Phase 4 — Scaffold
 
-Write files in dependency order so each can reference the previous, named as the reference names them. The Firestore section replaces steps 5 and 6 when it is on.
+Write files in dependency order so each can reference the previous, named as the reference names them. The Firestore section replaces steps 5 and 6 when it is on, and adds to the others.
 
-1. **Model** — the record type and the state interface. State carries the load lifecycle the reference uses (e.g. `status: 'idle' | 'loading' | 'loaded' | 'error'` plus `error: string | null`), and an entity state for a collection.
+1. **Model** — the record type and the state interface. State carries the load lifecycle the reference uses (e.g. `status: 'idle' | 'loading' | 'loaded' | 'error'` plus `error: string | null`), and an entity state for a collection. A Firestore-fed slice also carries the loaded and server-confirmed signals the Firestore section names.
 2. **Actions** — `createActionGroup({ source: '<Slice>', events: { ... } })`: the load lifecycle (`Load` / `Load Success` / `Load Failure`) and, per write, a dedicated `Create …` / `Update …` / `Delete …` with its `Success` and `Failure`.
 3. **Reducer** — the feature key in kebab-case, the initial state, one `on()` per action; `createEntityAdapter` per keyed collection (`setAll` / `setOne` / `setMany` for loaded data). Handlers move `status` and `error`.
 4. **Selectors** — `createFeature` gives the base selectors; add each adapter's `getSelectors()` and derived selectors with `createSelector` over pure functions (in the domain's utils library when it has one).
@@ -205,6 +205,7 @@ Write files in dependency order so each can reference the previous, named as the
 3. Type-check at consumers: `inject(<Slice>Facade)` and its reads resolve.
 4. **Registration** — confirm the feature, the effects and any boot-time service are in the registration file, or that `provide<Slice>Store()` is in the app root's `providers`. An unregistered slice never hydrates and nothing fails.
 5. **Feature key** — the key the selectors read is the one the feature registers (`createFeature({ name })` derives it); a wrong key answers `undefined`, it never throws.
+6. **Firestore** — with the Firestore section on, every item of its **Verify** list: both read signals end to end, their specs, every absence decision on the confirmed signal, no parent aggregate confirmed over an empty parent set before the parent slice confirms, and no existence decision from a one-shot get.
 
 If refactoring, delete the dead code once the new slice takes over.
 
@@ -218,7 +219,7 @@ An effect in the consuming slice listens to the producing slice's success action
 
 ### Data hydration race (a component mounts before the data lands)
 
-Don't solve it in the component with an imperative hydrate effect. If the slice's data drives form fields, either (a) give the component a component-scoped SignalStore that reads the slice reactively (`/giga-angular:ngrx-component-state`), or (b) gate the form with `@if` on an `isLoaded` selector so it renders once the data arrives.
+Don't solve it in the component with an imperative hydrate effect. If the slice's data drives form fields, either (a) give the component a component-scoped SignalStore that reads the slice reactively (`/giga-angular:ngrx-component-state`), or (b) gate the form with `@if` on an `isLoaded` selector so it renders once the data arrives. For a Firestore-fed slice, deciding the record is absent (a create form instead of an edit form) waits for the confirmed signal, not `isLoaded`.
 
 ### Router-driven reads
 
