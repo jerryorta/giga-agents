@@ -98,6 +98,8 @@ On an `epic-branch` board, the epic closes after its PR merges: type `/giga-work
 
 It stops only when it needs you, such as for a decision it cannot settle, a story marked `loop: manual`, a merge conflict, a failed login, failures in a row, or a cross-actor test. A decision stop prints the question and the line that resumes the run: `/giga-workflow:epic-loop <board> --resume "<answer>"`.
 
+It also stops for anything in `workflow.loop.neverUnattended`, the repo's list of work a person must do. A board can narrow one of those entries for itself with `loop.unattendedAllowances`: what its stories may then do unattended, and what still comes to you. [`/giga-workflow:epic-config`](../plugins/giga-workflow/skills/epic-config/SKILL.md) shows and edits them.
+
 ### Cross-actor testing
 
 A cross-actor test checks a change across two signed-in people: one persona acts in one browser profile, and another checks the result in a second. On a board with `hybridMode: "conditional"`, the loop ships every story unattended except one that needs this test. It pauses that story before its PR, with the gate green and the work uncommitted. A story's `crossActor:` front matter decides the need ahead of the loop's own triage.

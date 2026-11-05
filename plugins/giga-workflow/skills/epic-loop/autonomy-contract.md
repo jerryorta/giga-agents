@@ -20,7 +20,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `docs.antiPatterns` | the anti-pattern list searched in tier 3 (§6.3) | skip that source |
 | `ideas.policy` (top level) | the Idea Board entry threshold and match check (§4) | ideas stay a plans-file note and are never written to a board |
 | `ideas.board` (top level) | where qualifying ideas are written (§4) | a qualifying idea goes in the story's plan file under `## Ideas for the Idea Board` |
-| `loop.neverUnattended` | the repo-specific classes that always escalate (§5) | only the generic classes below apply |
+| `loop.neverUnattended` | the repo-specific classes that escalate unless your board narrows one (§5) | only the generic classes below apply |
 | `loop.decisionSkills.chart` | the skill that owns chart decisions (§6.2) | go to §6.3 for a chart decision |
 | `loop.decisionSkills.accessibility` | the skill that owns accessibility-selector decisions (§6.2) | go to §6.3 for that decision |
 | `loop.precedentClones` | local framework source clones searched in tier 3 (§6.3) | skip that source |
@@ -105,7 +105,7 @@ heading. A finding in what this story built is never an idea: fix it here. Repor
 ## 5. Escalate, do not improvise
 
 Return `NEEDS_HUMAN` (§8) — leaving the branch in place, uncommitted, for a human to pick up — for
-anything in `loop.neverUnattended`, plus:
+anything in `loop.neverUnattended` that no allowance on your board covers (below), plus:
 
 - a **merge conflict** on the PR, or on a direct board (`mergeMode: "direct"`) a rebase conflict or a
   refused push of `<git.mainBranch>` at `/giga-workflow:epic-story-complete`; the work is committed by then, so name
@@ -113,6 +113,35 @@ anything in `loop.neverUnattended`, plus:
 - anything destructive or hard to reverse that the ticket did not explicitly ask for
 - a `story` UX finding whose fix would need a genuinely new feature beyond the story's goal and
   acceptance: the question and your recommendation go in `decisions[]`, and no Idea Board entry is written
+
+### 5.1 — Board allowances narrow `neverUnattended`
+
+A board may narrow a `neverUnattended` entry through `loop.unattendedAllowances` in its
+`epic.<board>.json`. Read it before your first action that could touch an entry. Each allowance
+holds:
+
+- `id`: a short label you report it by
+- `narrows`: the `neverUnattended` entry it narrows, verbatim
+- `allows`: what you may now do unattended on this board, within that entry
+- `stillEscalates`: what within that entry still returns `NEEDS_HUMAN`
+
+An action on a `neverUnattended` entry proceeds unattended only when all of these hold:
+
+1. an allowance on your story's board names that entry in `narrows`
+2. the action falls inside one of its `allows` items, read narrowly: an item covers what it names, and
+   anything it does not name escalates
+3. the action matches none of its `stillEscalates` items; when an item matches, it escalates, whatever
+   `allows` says
+4. the action touches no other `neverUnattended` entry, or an allowance covers that entry as well
+
+An allowance only narrows. It never permits anything beyond the entry it names, never lifts the
+generic classes in the list above, and never applies on another board. With no
+`loop.unattendedAllowances`, every `neverUnattended` entry escalates in full. When you cannot tell
+whether an action falls inside an allowance, it does not: escalate.
+
+Record each allowance you relied on in the §8 `allowances` field: its `id`, the action you took under
+it, and the evidence (the command you ran, or `file:line`). An action an allowance covers is not a
+`decisions[]` entry.
 
 ## 6. Decision-resolution ladder
 
@@ -405,6 +434,13 @@ FAILED whenever the model emphasises it; a fenced block is immune to that.)
     "reason": "single persona — the Owner exercises every criterion"
   },
   "evolution": ["ABC-124 unaffected — no shared write path"],
+  "allowances": [
+    {
+      "id": "deploy-existing-functions",
+      "action": "deployed the updated export to production and checked it there",
+      "evidence": "npm run deploy:functions -- <export name>"
+    }
+  ],
   "ideas": 0,
   "slices": 1,
   "files_changed": 6,
@@ -421,7 +457,7 @@ FAILED whenever the model emphasises it; a fenced block is immune to that.)
 | `PR_OPEN_UNMERGED` | PR opened and ticket In Review, but the merge did not land | Branch pushed, PR open |
 | `AWAITING_ACTOR_TEST` | Gate green and checks done, but the story needs cross-actor testing (§7.5) | Branch in place with the finished work, uncommitted |
 | `BLOCKED` | Ticket not implementable as written (§4) | No branch, or a branch with no commits |
-| `NEEDS_HUMAN` | Hit §5, or an `UNCLEAR` decision (§6.4) | Branch in place with the work so far, uncommitted (committed after a direct board's rebase conflict or refused push, §5) |
+| `NEEDS_HUMAN` | Hit §5 outside every board allowance (§5.1), or an `UNCLEAR` decision (§6.4) | Branch in place with the work so far, uncommitted (committed after a direct board's rebase conflict or refused push, §5) |
 | `FAILED` | Implementation attempted and the gate could not be made green | Branch in place; put the failing output in `blocker` |
 
 Populate `blocker` with the specific, actionable reason for every status except `SHIPPED` — it is
@@ -446,6 +482,10 @@ the flag, set `browser` to `null`.
 **`crossActor` is machine-checked** when the board sets `hybridMode: "conditional"`: a story the
 triage marked as needing it that comes back `SHIPPED` stops the run. On other boards, set it to
 `null`.
+
+**`allowances` is machine-checked as well.** List every allowance you relied on (§5.1), or `[]` when
+you relied on none. An entry whose `id` is not in your board's `loop.unattendedAllowances`, or that
+has no `evidence`, stops the run.
 
 ---
 

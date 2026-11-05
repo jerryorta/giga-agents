@@ -402,7 +402,7 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 | `workflow.checks` · `workflow.docs` | the build/lint/test gate and single-target command; the standards docs and `AGENTS.md` locations |
 | `workflow.devServers` · `workflow.devServerPrelude` · `workflow.storybook` | how to start each app and Storybook, and on which port |
 | `workflow.planning` · `workflow.boardTemplate` | dependency signals and path globs `/giga-workflow:epic-plan` and `/giga-workflow:jira` use to split and order work; the starter board `/giga-workflow:epic-plan` seeds a new board from |
-| `workflow.loop` · `workflow.browser` | what an unattended run must hand to a human, where it keeps its ledger, precedent sources, browser checks |
+| `workflow.loop` · `workflow.browser` | what an unattended run must hand to a human (a board narrows an entry for itself with `loop.unattendedAllowances`), where it keeps its ledger, precedent sources, browser checks |
 | `workflow.skillsRepo` | optional: a second repo holding skills a story may change — its checkout, live branch, check and push commands; the epic workflow lands and pushes it with the story |
 | `workflow.secrets` · `workflow.notify` · `workflow.memoryDir` · `workflow.epicCloseSkill` | optional: secrets repos to sync after a merge, desktop notifications, a personal memory folder, a skill to run when an epic closes |
 | `standards` | which docs `giga-standards` injects for each kind of file, the Bash source-file pattern and the byte budget (see [the giga-standards page](plugins/giga-standards/README.md)) |

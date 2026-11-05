@@ -37,6 +37,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `skillsRepo.path` | the skills repo where a skill-only story's commit is verified (Steps 2d, 2d.5) | no skill-only stories: a story with no PR is verified by the board's mode alone |
 | `skillsRepo.branch` | the skills repo's live branch that commit must reach on `origin` | `main` |
 | `loop.ledgerDir` | the directory holding `<board>.jsonl`, the run's durable state | `~/.claude/epic-loop` |
+| `loop.neverUnattended` | the entries a board's `loop.unattendedAllowances` may narrow, checked in Step 0 | nothing to narrow: a board that sets `loop.unattendedAllowances` stops at Step 0 |
 | `browser.runProfileLabel` | the browser profile the user connects for the run's browser checks (Step 1.4) | say "the profile you use for this repo" |
 | `browser.renderingFiles` | the regex for files that render UI, used by the Step 2d.5 browser check | count every changed file, so a `not-applicable` browser result always stops the run |
 | `notify` | the command that queues a desktop notification | send no desktop notification; the printed block is the only signal |
@@ -99,6 +100,33 @@ Bind the `config.loop` block, applying these defaults when the field is absent:
 | `evolutionAudit` | `false` | run `/giga-workflow:epic-evolution-audit` before each ship |
 | `maxConsecutiveFailures` | `2` | consecutive non-`SHIPPED` outcomes before escalating |
 | `browserVerification` | `false` | story agents check UI changes in Storybook or the running app before shipping (contract §7); the run connects a browser once, in Step 1.4 |
+| `unattendedAllowances` | `[]` | this board's narrowings of `workflow.loop.neverUnattended` (contract §5.1); `[]` = every entry escalates in full |
+
+**`unattendedAllowances`** lets one board do unattended part of what `neverUnattended` hands to a
+human, without changing the rule for every board. Each allowance is an object:
+
+| Key | Holds |
+|---|---|
+| `id` | a short label, unique on the board; the story agent reports it in §8 `allowances` |
+| `narrows` | one `workflow.loop.neverUnattended` entry, copied verbatim |
+| `allows` | strings: what a story agent on this board may now do unattended, within that entry |
+| `stillEscalates` | strings: what within that entry still returns `NEEDS_HUMAN` |
+
+```json
+"unattendedAllowances": [
+  {
+    "id": "deploy-existing-functions",
+    "narrows": "anything touching secrets or a prod deploy",
+    "allows": ["a production deploy of updates to existing serverless functions, one function at a time, when the story's acceptance needs it, then a check on the live app"],
+    "stillEscalates": ["a new public endpoint", "a full deploy", "anything touching secrets"]
+  }
+]
+```
+
+An allowance only narrows the entry it names: what its `allows` items do not name, and whatever its
+`stillEscalates` items name, escalates as before. **Validate it here:** every `narrows` must equal a
+`neverUnattended` entry exactly, and every `id` must be unique. A mismatch would leave the allowance
+silently inert, so stop and point at `/giga-workflow:epic-config <board>` to correct it.
 
 **Read the ledger** at `<loop.ledgerDir>/<board>.jsonl` (create the directory on first write). It
 lives outside the repo so it survives sessions and never dirties the tree. The ledger — not this
@@ -199,6 +227,11 @@ written? It returns `READY` or `BLOCKED` plus one sentence.
 `BLOCKED` → record it, skip the story, continue the loop. A ~30s Sonnet check that avoids sinking a
 10–20 minute Opus session into an unworkable ticket pays for itself immediately.
 
+Give the triage agent the board's `loop.unattendedAllowances` with the key. A story whose acceptance
+needs an action on a `neverUnattended` entry is implementable as written when an allowance covers
+that action (contract §5.1), so the agent never returns `BLOCKED` for it. Whatever the allowances
+leave out is the story agent's to escalate under contract §5, not a triage verdict.
+
 **The triage agent also answers a size question**, read from the acceptance criteria, not the title:
 `SIZE: one job` or `SIZE: multi-job — <job 1> | <job 2> [| …]`. A job is a distinct user goal worth
 shipping on its own. A single flow with several steps is one job, and so are a story's states (empty,
@@ -241,6 +274,9 @@ Keep the prompt this small — the contract file carries the weight, and it neve
 > → `/giga-workflow:epic-merge-pr --yes`.
 >
 > End your turn with the §8 fenced JSON report and nothing after it.
+
+Never restate the board's `loop.unattendedAllowances` in the prompt: contract §5.1 has the agent read
+them from the board config.
 
 On a board with `config.mergeMode === "direct"`, drop `→ /giga-workflow:epic-merge-pr --yes`: the chain ends at
 `/giga-workflow:epic-story-complete --yes`, which fast-forwards `<git.mainBranch>` to the story and pushes it.
@@ -289,7 +325,7 @@ Ground truth (2d) proves the story *shipped*. It cannot see whether the story sh
 thing — that is what this check is for, and it is the only safeguard standing between an unattended
 merge and a decision nobody sanctioned.
 
-Read the report's `decisions[]`, `reviews[]` and, when `loop.browserVerification` is set, `browser`.
+Read the report's `decisions[]`, `reviews[]`, `allowances[]` and, when `loop.browserVerification` is set, `browser`.
 **Hard-stop the run (Step 3) on any of:**
 
 | Condition | Why it stops the run |
@@ -300,6 +336,7 @@ Read the report's `decisions[]`, `reviews[]` and, when `loop.browserVerification
 | `browserVerification` set, and `browser` missing or its `result` is not `pass` / `not-applicable` | contract §7: a UI change shipped without being looked at |
 | `browserVerification` set, `result: "not-applicable"`, and the PR touched a rendering file | contract §7: `not-applicable` is only for diffs with no rendered surface |
 | `conditional`, `needsActor` yes, and the story came back `SHIPPED` | contract §7.5: a story that needed a second persona merged without one |
+| an `allowances[]` entry whose `id` is not in `loop.unattendedAllowances`, or with no `evidence` | contract §5.1: a `neverUnattended` action ran under an allowance the board does not grant, or with nothing to check it by |
 
 The rendering-file test is one ground-truth command. It counts the files, not their contents, so it
 is not a diff read:
@@ -333,7 +370,8 @@ as one would be wrong.
 
 ### 2e — Record, and stay quiet
 
-Append one `story` line to the ledger with the resolved (not merely reported) status.
+Append one `story` line to the ledger with the resolved (not merely reported) status. When the report
+lists allowances, add their ids as `"allowances":["<id>"]`, so the owner can audit what ran under each.
 
 Then recompute the progress counts as in 2a, after the ground-truth check has confirmed the ticket reached Done, and print
 `<done> of <total> stories complete`.

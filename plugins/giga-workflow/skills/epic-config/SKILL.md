@@ -18,6 +18,7 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | --- | --- | --- |
 | `jira.mcpPrefix` | the prefix of the Atlassian MCP tool ids Step 8 loads and calls | skip Step 8 and say the repo has no `jira.mcpPrefix` in `.claude/giga/config.json` |
 | `jira.cloudId` | the Jira site Step 8's calls address | look it up with `getAccessibleAtlassianResources` |
+| `loop.neverUnattended` | the entries a `loop.unattendedAllowances` allowance may name in `narrows` (Step 4) | refuse to add an allowance and say the repo has no `loop.neverUnattended` in `.claude/giga/config.json` |
 
 ---
 
@@ -64,6 +65,7 @@ routingFiles      <count> file(s)
 conventions       <count> item(s)
 designReferences  <"(none)" or summary of keys>
 epicEvolutionRules <count> board addenda, or "(canonical only)" when [] / "(opted out)" when null
+loop.unattendedAllowances <count> allowance(s), or "(none)" when absent or []
 ─────────────────────────────────────────────────────
 ```
 
@@ -71,6 +73,7 @@ epicEvolutionRules <count> board addenda, or "(canonical only)" when [] / "(opte
 
 For `routingFiles` and `conventions`, if the count > 0, list the values indented below the row.
 For `designReferences`, if set, list each key and its value indented below.
+For `loop.unattendedAllowances`, list each allowance indented below: its `id`, the `neverUnattended` entry it `narrows`, then its `allows` and `stillEscalates` items.
 
 ## Step 3 — Ask what to update
 
@@ -95,6 +98,15 @@ Parse the user's request and update the in-memory config object accordingly. Com
 | `set libraries.store to <path>` | Update nested `libraries.store` |
 | `set designReferences.<key> to <value>` | Update or create key in `designReferences` object |
 | `clear designReferences` | Set `designReferences` to `null` |
+| `add allowance: <id>` | Append `{ "id", "narrows", "allows": [], "stillEscalates": [] }` to `loop.unattendedAllowances`, creating `loop` and the array when absent |
+| `edit allowance <id>` | Change that allowance's `narrows`, or add or remove its `allows` / `stillEscalates` items |
+| `remove allowance <id>` | Remove it; an empty array may be dropped |
+
+An allowance lets an `/giga-workflow:epic-loop` story agent on this board do unattended part of what one `workflow.loop.neverUnattended` entry hands to a human (that skill's Step 0 has the shape and an example). Before writing one:
+
+- `narrows` must equal one `loop.neverUnattended` entry from `.claude/giga/config.json` exactly. Show the entries and have the user pick one; never paraphrase it, because a mismatch stops `/giga-workflow:epic-loop` at Step 0.
+- `id` is short and unique on the board.
+- `allows` names what may now run unattended, concretely; `stillEscalates` names what inside that entry still goes to a human. An allowance only narrows its entry, so never write an `allows` item that reaches beyond it.
 
 If any request is ambiguous, ask for clarification before writing.
 
