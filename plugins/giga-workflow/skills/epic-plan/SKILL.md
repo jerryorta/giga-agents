@@ -406,6 +406,8 @@ The wave plan is written to the epic's local plan file, not Jira — `$epicPath`
 
 Branch on the description-rewrite policy chosen in Step 9:
 
+An owner decision adopted on a re-plan gets ONE line in the epic's decisions list naming the owning stories, and new cuts get only their wave-plan lines. Each cut's history, red-team and expert results stay in the stories' own plan files, never in the epic's prose.
+
 ### Policy A — Replace ONLY the `## Wave Plan` section
 
 Locate the existing `## Wave Plan` section in the description (any heading-2 named exactly "Wave Plan", case-insensitive). Replace its contents (everything from that heading until the next heading-2 or the end of the document) with the new wave plan rendered below. **Every other section stays byte-identical.**
