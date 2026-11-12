@@ -110,7 +110,7 @@ Whatever path resolved them, **echo both values prominently in the Step 4 confir
 **Load the Atlassian MCP tools** — ONE `ToolSearch` call, not five (`<jira.mcpPrefix>` is the configured tool-id prefix):
 
 ```
-select:<jira.mcpPrefix>getAccessibleAtlassianResources,<jira.mcpPrefix>getJiraIssue,<jira.mcpPrefix>getTransitionsForJiraIssue,<jira.mcpPrefix>transitionJiraIssue,<jira.mcpPrefix>addCommentToJiraIssue,<jira.mcpPrefix>createJiraIssue
+select:<jira.mcpPrefix>getAccessibleAtlassianResources,<jira.mcpPrefix>getJiraIssue,<jira.mcpPrefix>executeRead,<jira.mcpPrefix>transitionJiraIssue,<jira.mcpPrefix>addOrEditJiraIssueComment,<jira.mcpPrefix>createJiraIssue
 ```
 
 **Parse the remaining flags** (after stripping board + key):
@@ -161,7 +161,7 @@ Before the branch's first push there is no `origin/<skillsRepo.branch>`: the bas
 - `git status --short` is empty, the skills leg is pending and this repo already has `<KEY>` commits (made outside this skill). Stop and surface both lists; the owner decides how they ship.
 - The diff includes files from completely unrelated areas — surface the file list and ask the user to confirm rather than refusing outright. (Heuristic only; the user has final say.)
 
-**Read the ticket.** `getJiraIssue(cloudId, KEY, fields=["summary", "status", "labels", "subtasks"], responseContentFormat="markdown")` — request `subtasks` **here**, so Step 10 already has them and never needs its own fetch. If the session does not already have a `cloudId` in context (it usually does, from `/giga-workflow:jira`; otherwise use `jira.cloudId`), call `getAccessibleAtlassianResources()` in this same message. Save `summary`, current status (warn if not "In Progress"), labels, and the subtask list.
+**Read the ticket.** `getJiraIssue(cloudId, KEY, fields=["summary", "status", "labels", "subtasks"], fieldsByKeys=true, responseContentFormat="markdown")` — request `subtasks` **here**, so Step 10 already has them and never needs its own fetch. If the session does not already have a `cloudId` in context (it usually does, from `/giga-workflow:jira`; otherwise use `jira.cloudId`), call `getAccessibleAtlassianResources()` in this same message. Save `summary`, current status (warn if not "In Progress"), labels, and the subtask list.
 
 ## Step 2 — Epic evolution scan (skip if `config.epicEvolutionRules` is null)
 
@@ -408,9 +408,11 @@ Failure handling:
 Read the transitions and match by **name** — never guess an id, they differ per project.
 
 ```
-getTransitionsForJiraIssue(cloudId, KEY)
-transitionJiraIssue(cloudId, KEY, transition={id: <matched-id>})
+<jira.mcpPrefix>executeRead(name="listJiraIssueTransitions", cloudId, inputs={issueIdOrKey: KEY}, responseFields=["transitions.id","transitions.name","transitions.to.name"])
+<jira.mcpPrefix>transitionJiraIssue(cloudId, issueIdOrKey=KEY, transitionId="<matched-id>")
 ```
+
+Match on the target status (`to.name`).
 
 - **PR mode** → match **In Review** (case-insensitive; common variants "In Review", "Code Review", "Ready for Review" — prefer the exact "In Review"). If no review state is reachable, surface the available transitions and let the user pick; if the workflow has no review state at all, leave the ticket In Progress, note it in the final report, and still post the Step 8 comment so the linkage is captured.
 - **Epic-branch mode** → match **Done**. The story is integrated into `config.epicBranch` and verified; there is no per-story PR to wait on, which mirrors how an epic-branch story is closed by hand. If no Done transition is reachable, surface the options and let the user pick.
@@ -430,25 +432,14 @@ If a sub-task can't reach Done directly (workflow gap), surface it and continue 
 ⚡ **Issue this in the same message as Step 6's transition** — they're independent once the PR URL is in
 hand — and in the same message as Step 7's sub-task transitions where there are any.
 
-Post a short ADF comment so the work is discoverable without scanning git history. PR mode links Jira → PR; epic-branch mode has no PR, so head it "Committed on epic branch" and drop the PR-link paragraph. Direct mode has no PR either: head it "Merged to `<git.mainBranch>`", drop the PR-link paragraph, and give the SHA on `<git.mainBranch>` (`Commit: <short-sha> on <git.mainBranch> (epic <config.epicKey>).`). When the skills leg landed, add a paragraph `Skills: <skills-sha> on <skillsRepo.branch> (<repo name>).` A skill-only story heads the comment `Landed on <skillsRepo.branch>` and keeps only that paragraph.
+Post a short markdown comment (`<jira.mcpPrefix>addOrEditJiraIssueComment(cloudId, issueIdOrKey=KEY, commentBody=<markdown>)`) so the work is discoverable without scanning git history. PR mode links Jira → PR; epic-branch mode has no PR, so head it "Committed on epic branch" and drop the PR-link paragraph. Direct mode has no PR either: head it "Merged to `<git.mainBranch>`", drop the PR-link paragraph, and give the SHA on `<git.mainBranch>` (`Commit: <short-sha> on <git.mainBranch> (epic <config.epicKey>).`). When the skills leg landed, add a paragraph `Skills: <skills-sha> on <skillsRepo.branch> (<repo name>).` A skill-only story heads the comment `Landed on <skillsRepo.branch>` and keeps only that paragraph.
 
-```json
-{ "version": 1, "type": "doc", "content": [
-  { "type": "heading", "attrs": { "level": 3 }, "content": [{ "type": "text", "text": "In Review" }] },
-  { "type": "paragraph", "content": [
-    { "type": "text", "text": "PR: " },
-    { "type": "text", "text": "<PR URL>", "marks": [{ "type": "link", "attrs": { "href": "<PR URL>" } }] }
-  ]},
-  { "type": "paragraph", "content": [
-    { "type": "text", "text": "Commit: " },
-    { "type": "text", "text": "<short-sha>", "marks": [{ "type": "code" }] },
-    { "type": "text", "text": " on branch " },
-    { "type": "text", "text": "<current-branch>", "marks": [{ "type": "code" }] },
-    { "type": "text", "text": " (epic " },
-    { "type": "text", "text": "<config.epicKey>", "marks": [{ "type": "code" }] },
-    { "type": "text", "text": ")." }
-  ]}
-]}
+```markdown
+### In Review
+
+PR: [<PR URL>](<PR URL>)
+
+Commit: `<short-sha>` on branch `<current-branch>` (epic `<config.epicKey>`).
 ```
 
 If the comment fails to post, report the error but do not roll back the commit/push/PR/transition — the comment is non-blocking.
@@ -488,7 +479,7 @@ Run this for every item that survived the Step 4 gate. **This step is the work, 
 
 **(a) New story.** Only for genuinely new product work — never a refactor (`docs.constraints` § Refactor When Touched: refactors are done in the story in progress, no exceptions). Born-split, same as `/giga-workflow:create-jira`:
 
-1. `createJiraIssue(cloudId, projectKey, issueTypeName=<Bug|Task|Story>, parent=<config.epicKey>, summary=<concise, <80 chars>)` → read the `key`.
+1. `createJiraIssue(cloudId, projectKey, issueType=<Bug|Task|Story>, parent=<config.epicKey>, summary=<concise, <80 chars>)` → read the `key`.
 2. `Write` the content to `<plans.repo>/<board>/<KEY>.md` (front matter `jira/project/board/type/epic/summary` + body). Put the scope, the evidence and the acceptance there — **never** in the epic description.
 3. **Transition to `<jira.createStatus>`** (`To Do` when absent) — read the transitions and match by NAME; never guess the id. ⚠️ A project may create an issue in **`Backlog`**, so skipping this leaves the story invisible to `/giga-workflow:epic-next`'s JQL — the single most common way a filed follow-up is silently lost.
 4. `python3 <plans.script> stub <KEY>`.
@@ -500,7 +491,7 @@ Create it in the ticket-ready status (`jira.createStatus`) unconditionally. Do *
 batch the `createJiraIssue` calls in one message, then batch the `stub` invocations into one `Bash` call
 (`… stub KEY-1 && … stub KEY-2`).
 
-**(b) Existing sibling needing a comment or a description edit.** Post via `addCommentToJiraIssue`, or edit that story's **own** `<plans.repo>/<board>/<KEY>.md` — never `editJiraIssue(fields={description})`, which only holds a stub.
+**(b) Existing sibling needing a comment or a description edit.** Post via `addOrEditJiraIssueComment`, or edit that story's **own** `<plans.repo>/<board>/<KEY>.md` — never `editJiraIssue(fields={description})`, which only holds a stub.
 
 **(c) Wave plan — update it, do not propose it.** Print just the wave plan with `python3 <plans.script> section <config.epicKey> Wave` (its line range goes to stderr), `Read` only that range of the epic file (`offset`/`limit`), then edit `<plans.repo>/<board>/<config.epicKey>.md`: append each new story to the wave it belongs to as a one-liner `- <KEY> — <summary> · <Type>`, opening a new `### Wave <N> — <theme>` if the work fits no existing wave. Keep the entry to ONE line; scope belongs in the child ticket. If a rule the story settled needs recording, add at most one bullet under the wave-rationale section — never per-story detail.
 

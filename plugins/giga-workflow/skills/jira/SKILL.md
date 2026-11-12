@@ -49,7 +49,7 @@ This skill still makes MCP calls, so load the required MCP tools with **one** To
 same result:
 
 ```
-select:<jira.mcpPrefix>getAccessibleAtlassianResources,<jira.mcpPrefix>getJiraIssue,<jira.mcpPrefix>addCommentToJiraIssue,<jira.mcpPrefix>getTransitionsForJiraIssue,<jira.mcpPrefix>transitionJiraIssue
+select:<jira.mcpPrefix>getAccessibleAtlassianResources,<jira.mcpPrefix>getJiraIssue,<jira.mcpPrefix>listJiraIssueComments,<jira.mcpPrefix>addOrEditJiraIssueComment,<jira.mcpPrefix>executeRead,<jira.mcpPrefix>transitionJiraIssue
 ```
 
 Add the Stitch trio to that same call **only when the ticket actually carries a Stitch reference**
@@ -119,7 +119,8 @@ Explicit batch points are marked ⚡.
    For the status metadata + comments the local file does not carry, make a **scoped** MCP read — description dropped (it comes from the file above), no `expand="renderedFields"`:
 
    ```
-   <jira.mcpPrefix>getJiraIssue(cloudId, issueIdOrKey, fields=["summary","status","assignee","reporter","priority","issuetype","comment","created","updated","labels","components"])
+   <jira.mcpPrefix>getJiraIssue(cloudId, issueIdOrKey, fields=["summary","status","assignee","reporter","priority","issuetype","created","updated","labels","components"], fieldsByKeys=true)
+   <jira.mcpPrefix>listJiraIssueComments(cloudId, issueIdOrKey, orderBy="-created", maxResults=50)
    ```
 
 4. **Display a summary** to the user:
@@ -162,12 +163,12 @@ Explicit batch points are marked ⚡.
 2. **Transition to "In Progress"** unconditionally:
    - Get available transitions:
      ```
-     <jira.mcpPrefix>getTransitionsForJiraIssue(cloudId, issueIdOrKey)
+     <jira.mcpPrefix>executeRead(name="listJiraIssueTransitions", cloudId, inputs={issueIdOrKey: issueIdOrKey}, responseFields=["transitions.id","transitions.name","transitions.to.name"])
      ```
-   - Find the transition with `name: "In Progress"` and use its `id`
+   - Find the transition whose target status (`to.name`) is `In Progress` and use its `id`
    - Execute the transition:
      ```
-     <jira.mcpPrefix>transitionJiraIssue(cloudId, issueIdOrKey, transition={id: "<transition-id>"})
+     <jira.mcpPrefix>transitionJiraIssue(cloudId, issueIdOrKey, transitionId="<transition-id>")
      ```
    - If the ticket is already "In Progress", skip the transition call.
 
@@ -455,7 +456,7 @@ Then post a one-line breadcrumb comment so future readers know the description w
 
 > *Pre-implementation re-validation (`/giga-workflow:jira`, <today's date>) — description revised against current code state. Original preserved in the plans-repo git history.*
 
-Use `<jira.mcpPrefix>addCommentToJiraIssue` with a minimal ADF document containing just that one paragraph.
+Use `<jira.mcpPrefix>addOrEditJiraIssueComment(cloudId, issueIdOrKey, commentBody=<markdown>)` with a markdown body containing just that one paragraph.
 
 Refresh the saved ticket details from Phase 1 (Step 5) with the revised description so Phase 3 plans against the up-to-date version.
 
@@ -532,73 +533,33 @@ Hand `giga-ux:ux-architect` the plan-file path, the Phase 2.5 comp summary, any 
 
 After the user approves the plan (i.e., after exiting plan mode):
 
-1. **Post the implementation plan as a comment** on the Jira ticket using `<jira.mcpPrefix>addCommentToJiraIssue`. The comment body must be in Atlassian Document Format (ADF).
+1. **Post the implementation plan as a comment** on the Jira ticket using `<jira.mcpPrefix>addOrEditJiraIssueComment`. The comment body is markdown.
 
-   Build the ADF document with this structure:
+   Build the comment with this structure:
 
-   ```json
-   {
-     "version": 1,
-     "type": "doc",
-     "content": [
-       {
-         "type": "heading",
-         "attrs": { "level": 2 },
-         "content": [{ "type": "text", "text": "Implementation Plan" }]
-       },
-       {
-         "type": "heading",
-         "attrs": { "level": 3 },
-         "content": [{ "type": "text", "text": "Context" }]
-       },
-       {
-         "type": "paragraph",
-         "content": [
-           { "type": "text", "text": "<1-2 sentence summary of the problem and approach>" }
-         ]
-       },
-       {
-         "type": "heading",
-         "attrs": { "level": 3 },
-         "content": [{ "type": "text", "text": "Changes" }]
-       },
-       {
-         "type": "bulletList",
-         "content": [
-           {
-             "type": "listItem",
-             "content": [
-               {
-                 "type": "paragraph",
-                 "content": [
-                   { "type": "text", "text": "<file-path>", "marks": [{ "type": "code" }] },
-                   { "type": "text", "text": " — <what changes>" }
-                 ]
-               }
-             ]
-           }
-         ]
-       },
-       {
-         "type": "heading",
-         "attrs": { "level": 3 },
-         "content": [{ "type": "text", "text": "Branch" }]
-       },
-       {
-         "type": "paragraph",
-         "content": [{ "type": "text", "text": "<branch-name>", "marks": [{ "type": "code" }] }]
-       }
-     ]
-   }
+   ```markdown
+   ## Implementation Plan
+
+   ### Context
+
+   <1-2 sentence summary of the problem and approach>
+
+   ### Changes
+
+   - `<file-path>` — <what changes>
+
+   ### Branch
+
+   `<branch-name>`
    ```
 
    Call:
 
    ```
-   <jira.mcpPrefix>addCommentToJiraIssue(cloudId, issueIdOrKey, commentBody=<ADF document above>)
+   <jira.mcpPrefix>addOrEditJiraIssueComment(cloudId, issueIdOrKey, commentBody=<markdown above>)
    ```
 
-   Populate the ADF with the actual plan content:
+   Populate the comment with the actual plan content:
    - **Context**: A concise summary of the problem and the chosen approach
    - **Changes**: One bullet per file being created or modified, with the file path in code format and a short description of the change
    - **Branch**: The current git branch name
@@ -787,7 +748,7 @@ If 5b reported no failures, skip this step.
 
 After fixes are applied, compare the final implementation against the original ticket AC and specs. If **anything was intentionally built differently** — due to architectural constraints, a better approach discovered during development, a spec ambiguity resolved a certain way, or a scope reduction — post a comment on the Jira ticket documenting it.
 
-Use `<jira.mcpPrefix>addCommentToJiraIssue` with an ADF comment structured as:
+Use `<jira.mcpPrefix>addOrEditJiraIssueComment` with a markdown comment structured as:
 
 ```
 ## Implementation Notes

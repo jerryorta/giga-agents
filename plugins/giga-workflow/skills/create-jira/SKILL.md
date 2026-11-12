@@ -63,7 +63,7 @@ Parse tokens left-to-right: token 0 = board; token 1 = epic-id iff it matches `^
 4. **Verify the epic exists** (never assume): `python3 <plans.script> board --jql 'key = <epicKey>'` → confirm one row of `type: Epic`. If missing/not an epic, stop and report (likely a wrong board or number).
 5. **cloudId:** `jira.cloudId`; when absent, read from `jira.credentialsFile` (`python3 -c "import json;print(json.load(open('<jira.credentialsFile>'))['cloudId'])"`).
 6. **Optional domain enrichment** — if `.claude/giga/epic.<board>.json` exists, read only these domain-stable fields and bind them: `commitScope`, `app`, `libraries` (research-scope hints), `conventions`, `domainMemoryIndex`. **Ignore `epicKey`.** If `domainMemoryIndex` is set, Read `<memoryDir>/<domainMemoryIndex>`. Missing config → skip enrichment; `commitScope` defaults to `<board>` and research falls back to a scoped repo search.
-7. **Load MCP tools:** `ToolSearch("select:<jira.mcpPrefix>createJiraIssue,<jira.mcpPrefix>getTransitionsForJiraIssue,<jira.mcpPrefix>transitionJiraIssue")`.
+7. **Load MCP tools:** `ToolSearch("select:<jira.mcpPrefix>createJiraIssue,<jira.mcpPrefix>executeRead,<jira.mcpPrefix>transitionJiraIssue")`.
 
 ## Step 1 — Capture the finding
 
@@ -83,7 +83,7 @@ For a code-related finding, spawn ONE subagent (Agent tool, `Explore` or `genera
 ## Step 3 — Create the ticket (born-split)
 
 1. **Type:** use the given `type`, else infer — broken / regressed / wrong-behavior → **Bug**; polish / copy / small enhancement / standards-alignment → **Task**; needs real acceptance criteria / multi-part → **Story**. State the chosen type.
-2. **Mint the KEY** — `createJiraIssue(cloudId, projectKey, issueTypeName=<Bug|Task|Story>, parent=<epicKey>, summary=<concise, <80 chars>, description="See <plans.repo>/<board>/<KEY>.md")`. Read `key` from the response.
+2. **Mint the KEY** — `createJiraIssue(cloudId, projectKey, issueType=<Bug|Task|Story>, parent=<epicKey>, summary=<concise, <80 chars>, description="See <plans.repo>/<board>/<KEY>.md")`. Read `key` from the response.
 3. **Write** `<plansDir>/<KEY>.md` using the matching template below (front matter `jira/project/board/type/epic/summary` + body).
 4. **Assets** — for each staged screenshot: `mkdir -p <plansDir>/assets/<KEY>` then `cp` it to `<plansDir>/assets/<KEY>/NN-<slug>.png`, and embed in the md with a **relative** link: `![<alt>](assets/<KEY>/NN-<slug>.png)`.
 5. **Epic index — REQUIRED, never skipped.** Add `- <KEY> — <summary> · <Type>` to `<plansDir>/<epicKey>.md`:
@@ -92,7 +92,7 @@ For a code-related finding, spawn ONE subagent (Agent tool, `Explore` or `genera
    - **Neither shape:** add a `## Wave plan` section with a first wave and put it there.
 
    A ticket that exists outside its epic's plan is drift — the Jira parent link alone is not enough, because every `/epic-*` skill reads the wave plan for ordering. This step used to be conditional and silently skipped on wave-plan epics; it is now unconditional.
-6. **Transition** — `getTransitionsForJiraIssue(cloudId, KEY)`; pick the transition whose target status name is `<jira.createStatus>` and apply it (`transitionJiraIssue`). Never guess the id — it varies by project. ⚠️ Projects create in **`Backlog`** by default, so a skipped or failed transition leaves the ticket invisible to `/giga-workflow:epic-next`'s JQL. If there's no `<jira.createStatus>` transition, say so loudly in the report rather than leaving it as a footnote.
+6. **Transition** — `<jira.mcpPrefix>executeRead(name="listJiraIssueTransitions", cloudId, inputs={issueIdOrKey: KEY}, responseFields=["transitions.id","transitions.name","transitions.to.name"])`; pick the transition whose target status (`to.name`) is `<jira.createStatus>` and apply it (`transitionJiraIssue(cloudId, issueIdOrKey=KEY, transitionId="<id>")`). Never guess the id — it varies by project. ⚠️ Projects create in **`Backlog`** by default, so a skipped or failed transition leaves the ticket invisible to `/giga-workflow:epic-next`'s JQL. If there's no `<jira.createStatus>` transition, say so loudly in the report rather than leaving it as a footnote.
 7. **Stub** — `python3 <plans.script> stub <KEY>`.
 8. **Commit the plans repo.** With `plans.autoPush` true the repo pushes itself: commit only, and never report the commit as unpushed. With it false or absent, run `git push` right after the commit:
    ```bash

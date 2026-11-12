@@ -130,7 +130,7 @@ The first log lists the `<KEY>` commits on local branches that `origin/<skillsRe
 2. **If a ticket key is found** and Done is not held (previous section), load the required Atlassian MCP tools using the ToolSearch tool:
    - `select:<jira.mcpPrefix>getAccessibleAtlassianResources`
    - `select:<jira.mcpPrefix>getJiraIssue`
-   - `select:<jira.mcpPrefix>getTransitionsForJiraIssue`
+   - `select:<jira.mcpPrefix>executeRead`
    - `select:<jira.mcpPrefix>transitionJiraIssue`
 
 3. **Get the Atlassian Cloud ID:** use `jira.cloudId`; when absent, look it up:
@@ -140,22 +140,22 @@ The first log lists the `<KEY>` commits on local branches that `origin/<skillsRe
 
 4. **Check the ticket's current status:**
    ```
-   <jira.mcpPrefix>getJiraIssue(cloudId, issueIdOrKey, fields=["status"])
+   <jira.mcpPrefix>getJiraIssue(cloudId, issueIdOrKey, fields=["status"], fieldsByKeys=true)
    ```
    - If already "Done", skip the transition.
 
 5. **Get available transitions and transition to Done:**
    ```
-   <jira.mcpPrefix>getTransitionsForJiraIssue(cloudId, issueIdOrKey)
+   <jira.mcpPrefix>executeRead(name="listJiraIssueTransitions", cloudId, inputs={issueIdOrKey: KEY}, responseFields=["transitions.id","transitions.name","transitions.to.name"])
    ```
-   - Find the transition with `name: "Done"` and use its `id`.
+   - Find the transition whose target status (`to.name`) is `Done` and use its `id`.
    ```
-   <jira.mcpPrefix>transitionJiraIssue(cloudId, issueIdOrKey, transition={id: "<transition-id>"})
+   <jira.mcpPrefix>transitionJiraIssue(cloudId, issueIdOrKey=KEY, transitionId="<transition-id>")
    ```
 
 5b. **Close the ticket's sub-tasks → Done.** A decomposed story's sub-tasks reach Done with the story; this sweeps any still open (typically already closed by `/giga-workflow:epic-story-complete`). For an epic-branch-mode **epic** key this is a no-op — epics have no sub-tasks.
    ```
-   <jira.mcpPrefix>getJiraIssue(cloudId, issueIdOrKey, fields=["subtasks"])
+   <jira.mcpPrefix>getJiraIssue(cloudId, issueIdOrKey, fields=["subtasks"], fieldsByKeys=true)
    ```
    For each sub-task **not already "Done"**, read its transitions and transition it to **Done** (match by name, never guess the id). On any error, note it and continue — do not fail cleanup over a sub-task.
 

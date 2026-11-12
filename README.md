@@ -49,7 +49,7 @@ The epic workflow runs on two files in your repo and three commands. It also nee
    {
      "workflow": {
        "plans": { "repo": "~/plans", "script": "~/plans/scripts/plans.py" },
-       "jira": { "mcpPrefix": "mcp__claude_ai_Atlassian__" },
+       "jira": { "mcpPrefix": "mcp__claude_ai_Atlassian_MCP__" },
        "checks": { "gate": "npm run verify" }
      }
    }
@@ -349,7 +349,7 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
   },
   "workflow": {
     "plans": { "repo": "~/plans", "script": "~/plans/scripts/plans.py", "guide": "~/plans/AGENTS.md", "autoPush": false },
-    "jira": { "site": "<your Jira site>", "cloudId": "<cloud id>", "mcpPrefix": "mcp__claude_ai_Atlassian__", "createStatus": "To Do" },
+    "jira": { "site": "<your Jira site>", "cloudId": "<cloud id>", "mcpPrefix": "mcp__claude_ai_Atlassian_MCP__", "createStatus": "To Do" },
     "git": { "mainBranch": "main", "branchPrefix": "feat/", "mergeMethod": "squash", "autoMerge": false, "hasCI": true },
     "commit": { "format": "<type>(<scope>): <KEY> <subject>", "scopeRules": "docs/commit-scopes.json", "hooks": true, "refactorCommitFirst": true },
     "checks": { "gate": "npm run verify", "affected": "npm run verify:affected", "single": "npm run <target> -w <project>", "antiPatterns": null },
@@ -397,7 +397,7 @@ The plugins carry the method; each repo keeps its own data in `.claude/giga/conf
 | `angular.accessibility` | `standards[]`: rule docs for `/giga-angular:verify-accessibility`, each applying to every file or only to files under its `match` globs, and winning over the skill's generic rules |
 | `angular.promote` | the shared library's path, prefix, alias and story-title group; each source domain's prefix and story-title group; the domain library path pattern; the placement doc; banned content; commit scope; the verify command |
 | `workflow.plans` | the plans repo and its script; each key, and what the skills do without it, is in [The plans repo § Config](docs/plans-repo.md#config) |
-| `workflow.jira` | the Jira site, cloud id, MCP tool prefix, and the status a ready story sits in. `mcpPrefix` is a Jira tool's full name without the tool's own name: the hosted Atlassian connector's `mcp__claude_ai_Atlassian__getJiraIssue` gives `mcp__claude_ai_Atlassian__`, and a server you added yourself gives `mcp__<its name>__`, with its name as `/mcp` lists it |
+| `workflow.jira` | the Jira site, cloud id, MCP tool prefix, and the status a ready story sits in. `mcpPrefix` is a Jira tool's full name without the tool's own name: the hosted Atlassian connector's `mcp__claude_ai_Atlassian_MCP__getJiraIssue` gives `mcp__claude_ai_Atlassian_MCP__`, and a server you added yourself gives `mcp__<its name>__`, with its name as `/mcp` lists it |
 | `workflow.git` · `workflow.commit` | base branch, branch prefix, merge method, auto-merge, CI; commit format and scope rules |
 | `workflow.checks` · `workflow.docs` | the build/lint/test gate and single-target command; the standards docs and `AGENTS.md` locations |
 | `workflow.devServers` · `workflow.devServerPrelude` · `workflow.storybook` | how to start each app and Storybook, and on which port |

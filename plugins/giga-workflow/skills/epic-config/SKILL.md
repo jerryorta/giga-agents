@@ -141,9 +141,9 @@ The epic a board points at is the one being worked, so its Jira status says so. 
 or changed (a repoint); skip it for edits that leave `epicKey` alone.
 
 1. Load the tools in one `ToolSearch`:
-   `select:<jira.mcpPrefix>getTransitionsForJiraIssue,<jira.mcpPrefix>transitionJiraIssue`
+   `select:<jira.mcpPrefix>executeRead,<jira.mcpPrefix>transitionJiraIssue`
    (`jira.cloudId`, else `cloudId` via `getAccessibleAtlassianResources` if the session has none).
-2. Read the epic's transitions and match **In Progress** by name — never guess the id. Skip if it is already
+2. Read the epic's transitions (`<jira.mcpPrefix>executeRead(name="listJiraIssueTransitions", cloudId, inputs={issueIdOrKey: KEY}, responseFields=["transitions.id","transitions.name","transitions.to.name"])`) and match the one whose target status (`to.name`) is **In Progress** by name — never guess the id. Skip if it is already
    In Progress; leave a Done epic alone and say so (a board pointed at a finished epic is a config mistake).
 3. The previous `epicKey` is not touched here: `/giga-workflow:post-merge-cleanup` closes an epic once its last story is Done.
 

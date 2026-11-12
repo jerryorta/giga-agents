@@ -71,7 +71,7 @@ Refuse and stop when:
 
 ## Composition
 
-Invoke each constituent with the `Skill` tool at the point named below and follow its steps, applying the amendments in § Amendments. Where an amendment and the constituent's text differ, **the amendment wins**. Everything else — the Commitizen rules, the type inference table, the ADF comment shape, the evolution-item mechanics, the audit's dimensions and subagent contract, the merge-state table, the branch-deletion and wave-plan mechanics — is theirs, unchanged.
+Invoke each constituent with the `Skill` tool at the point named below and follow its steps, applying the amendments in § Amendments. Where an amendment and the constituent's text differ, **the amendment wins**. Everything else — the Commitizen rules, the type inference table, the comment shape, the evolution-item mechanics, the audit's dimensions and subagent contract, the merge-state table, the branch-deletion and wave-plan mechanics — is theirs, unchanged.
 
 This skill inherits `/giga-workflow:epic-story-complete`'s turn-cost model: it runs at the point of maximum context, so the steps below are **reading order, not one-call-per-message**. Explicit batch points are marked ⚡. Before the gate, the audit costs its discovery reads plus one foreground subagent (its Step 6 model choice stands — do not downgrade it; a wrong sibling edit is the expensive failure). The happy path after the gate is **six messages** (ship → transition + merge → Done + comment + plan edits → plans commit + Storybook + notify + next-story gather → next story's effort → report), plus one if GitHub is still computing mergeability on the first read.
 
@@ -118,7 +118,7 @@ The stale siblings and new-story recommendations print under the block's existin
 
 **A2 — Step 6 (→ In Review) stays.** The ticket is Done a minute later, but the review state is the transition the Done transition is known to be reachable from, and it costs nothing — it shares a message with the merge chain. Do not skip it and do not try In Progress → Done directly.
 
-**A3 — Step 8 comment: post it after the merge, headed `Merged`.** Same ADF shape with two changes — the heading text is `Merged`, and the `Commit:` paragraph names the **merge commit on `<git.mainBranch>`** (the `sha` from the merge chain's verification read), not the branch commit: `Commit: <merge-sha> on <git.mainBranch> (epic <config.epicKey>).` The PR paragraph is unchanged. Posting it before the merge would record a state the ticket left seconds later.
+**A3 — Step 8 comment: post it after the merge, headed `Merged`.** Same shape with two changes — the heading text is `Merged`, and the `Commit:` paragraph names the **merge commit on `<git.mainBranch>`** (the `sha` from the merge chain's verification read), not the branch commit: `Commit: <merge-sha> on <git.mainBranch> (epic <config.epicKey>).` The PR paragraph is unchanged. Posting it before the merge would record a state the ticket left seconds later.
 
 **A4 — Step 10(d): one plans-repo commit for the whole run.** It also carries `/giga-workflow:post-merge-cleanup`'s wave-plan edit (amendment C3) and the audit's sibling edits (amendment E2). Subject: `docs(<board>): <KEY> shipped` when there are no follow-ups, `docs(<board>): <KEY> shipped + follow-ups <NEW-KEYS>` when there are; append ` · audit <SIBLING-KEYS>` when sibling edits landed. Push it by that step's rule: with `plans.autoPush` true the repo pushes itself, so commit only; with it false or absent, push right after the commit.
 

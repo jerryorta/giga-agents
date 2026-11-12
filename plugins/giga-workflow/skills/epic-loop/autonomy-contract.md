@@ -66,8 +66,8 @@ The same reading applies to `/giga-workflow:jira` Phase 3.
 before any implementation.
 
 ```
-<jira.mcpPrefix>getTransitionsForJiraIssue(<jira.cloudId>, <KEY>)   # then match by NAME
-<jira.mcpPrefix>transitionJiraIssue(<jira.cloudId>, <KEY>, transition={id: "<matched id>"})
+<jira.mcpPrefix>executeRead(name="listJiraIssueTransitions", cloudId=<jira.cloudId>, inputs={issueIdOrKey: <KEY>}, responseFields=["transitions.id","transitions.name","transitions.to.name"])   # then match the target status (`to.name`) by NAME
+<jira.mcpPrefix>transitionJiraIssue(<jira.cloudId>, issueIdOrKey=<KEY>, transitionId="<matched id>")
 ```
 
 ⚠️ **Fetch the transitions and match on the name. Never reuse a transition id you saw elsewhere.**

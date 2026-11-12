@@ -25,8 +25,8 @@ Repo-specific values come from `.claude/giga/config.json` at the repository root
 | `plans.script` | `ensure` and `board` calls: plan-file paths, live child status | stop and say the repo has no `plans.script` in `.claude/giga/config.json` |
 | `plans.guide` | the plans repo's rules for plan files and the hybrid read | skip the guide references |
 | `plans.repo` | the plans repo whose `<board>/<KEY>.md` files are read and edited | stop and say the repo has no `plans.repo` in `.claude/giga/config.json` |
-| `jira.cloudId` | the scoped comment / status / labels read | call `<jira.mcpPrefix>getAccessibleAtlassianResources` for it |
-| `jira.mcpPrefix` | the prefix of the Jira MCP tool ids (`getJiraIssue`, `getAccessibleAtlassianResources`) | stop and say the repo has no `jira.mcpPrefix` in `.claude/giga/config.json` |
+| `jira.cloudId` | the scoped status / labels read and the comment read | call `<jira.mcpPrefix>getAccessibleAtlassianResources` for it |
+| `jira.mcpPrefix` | the prefix of the Jira MCP tool ids (`getJiraIssue`, `listJiraIssueComments`, `getAccessibleAtlassianResources`) | stop and say the repo has no `jira.mcpPrefix` in `.claude/giga/config.json` |
 | `jira.createStatus` | the status a newly proposed story is created in | `To Do` |
 | `git.branchPrefix` | the story-branch prefix the branch fallback parses | `feat/` |
 | `docs.constraints` | the repo's constraints doc, home of the refactor-when-touched rule | cite the rule as stated here; no doc link |
@@ -128,23 +128,25 @@ After stripping board + ticket key:
 
 Board navigation and ticket content (descriptions / wave plans) come from the plans repo (`plans.repo`), not the Atlassian MCP (which returns a ~5.5k-char fat envelope per issue and ignores field-narrowing — a 10-issue board query is ~55k chars). Canonical guide: the plans guide (`plans.guide`). Descriptions are **read from and written to** the local `<board>/<KEY>.md` files; comments (and the scoped status / labels read) stay on the MCP, and board navigation goes through the plans board-nav script.
 
-Load via ToolSearch the two tools this skill still calls on the MCP:
+Load via ToolSearch the three tools this skill still calls on the MCP:
 
 - `select:<jira.mcpPrefix>getAccessibleAtlassianResources`
 - `select:<jira.mcpPrefix>getJiraIssue`
+- `select:<jira.mcpPrefix>listJiraIssueComments`
 
-`getJiraIssue` is used only for the scoped `comment` read (plus status / labels) — the §2 hybrid pattern in the plans guide; descriptions come from the local plan files. `getAccessibleAtlassianResources` supplies the `cloudId` that scoped read needs when `jira.cloudId` is absent.
+`getJiraIssue` is used only for the scoped status / labels read and `listJiraIssueComments` for the comments — the §2 hybrid pattern in the plans guide; descriptions come from the local plan files. `getAccessibleAtlassianResources` supplies the `cloudId` that scoped read needs when `jira.cloudId` is absent.
 
 (Do **not** load `searchJiraIssuesUsingJql` — board nav goes through the plans board-nav script. Do **not** load `editJiraIssue` — description edits are written to the local plan files, never to Jira. Do **not** load create/transition/comment tools — this skill only edits descriptions. Creating new sibling stories is a separate user action.)
 
 ## Step 4 — Get cloud ID (`jira.cloudId`) + read the just-completed ticket
 
-The **description** comes from the local plan file (source of truth); **comments + status + labels** come from a scoped MCP read (the §2 hybrid pattern in the plans guide) — drop `expand="renderedFields"` and `description` from the field list:
+The **description** comes from the local plan file (source of truth); **status + labels + comments** come from scoped MCP reads (the §2 hybrid pattern in the plans guide) — drop `expand="renderedFields"` and `description` from the field list:
 
 ```
 python3 <plans.script> ensure <KEY>   → prints the local <prefix>/<KEY>.md path; Read it for the description
 <jira.mcpPrefix>getAccessibleAtlassianResources()  → cloudId   (skip when jira.cloudId is set)
-<jira.mcpPrefix>getJiraIssue(cloudId, KEY, fields=["summary","comment","status","labels"], responseContentFormat="markdown")
+<jira.mcpPrefix>getJiraIssue(cloudId, KEY, fields=["summary","status","labels"], fieldsByKeys=true, responseContentFormat="markdown")
+<jira.mcpPrefix>listJiraIssueComments(cloudId, KEY, orderBy="-created", maxResults=50)
 ```
 
 Save: `summary`, `description` (from the local plan file), full comment body list, status, labels. The audit subagent uses these to understand what the just-completed story actually settled.
@@ -175,7 +177,7 @@ Give the subagent:
 2. The candidate sibling list: keys + summaries (the agent reads each description from its local plan file itself).
 3. The relevant code surface: file paths the just-completed story touched (extract from the conversation transcript or from `git diff --stat HEAD~1` if the commit hasn't happened yet — Step 1 of /giga-workflow:epic-story-complete may have already produced this; otherwise re-derive).
 4. The binding rules the audit enforces: the four canonical rules from "The evolution rules" above, followed by `config.epicEvolutionRules` verbatim as board-specific addenda. Send the canonical four every time — a board config no longer restates them.
-5. The cloud ID + the tools it uses to read each candidate: the plans script (`ensure <KEY>` via `plans.script` + Read) for descriptions, and `<jira.mcpPrefix>getJiraIssue` for comments.
+5. The cloud ID + the tools it uses to read each candidate: the plans script (`ensure <KEY>` via `plans.script` + Read) for descriptions, and `<jira.mcpPrefix>listJiraIssueComments` for comments.
 
 Subagent prompt template:
 
@@ -222,7 +224,7 @@ Also audit the parent epic itself: <config.epicKey>.
 - Description / wave plan (source of truth): run
   `python3 <plans.script> ensure <KEY>` to print the local `<prefix>/<KEY>.md` path, then Read it.
 - Comments: scoped MCP read — Cloud ID: <cloudId>; for each candidate call
-  <jira.mcpPrefix>getJiraIssue(cloudId, KEY, fields=["summary","comment"], responseContentFormat="markdown")
+  <jira.mcpPrefix>listJiraIssueComments(cloudId, KEY, orderBy="-created", maxResults=50)
 - Read the full description (local plan file) plus all comments (MCP) before judging staleness.
 
 ## Audit dimensions

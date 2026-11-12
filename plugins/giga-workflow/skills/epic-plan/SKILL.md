@@ -65,7 +65,7 @@ Board navigation and ticket content come from the **plans repo** (`plans.repo`),
 - **Board nav** (child list + live status): `python3 <plans.script> board --jql '<jql>'` → JSON `[{key,status,category,type,priority,parent,summary}]` (live status, ~200 B/issue).
 - **Ticket content** (epic/story description): `python3 <plans.script> ensure <KEY>` prints the local `<prefix>/<KEY>.md` path (migrating on-miss); then `Read` it.
 
-Reads need no MCP — the script authenticates via `jira.credentialsFile`. **Writes to Jira do:** minting a story and moving a status (Step 10.5) go through the Atlassian MCP. Once Step 9 is confirmed, load them in ONE `ToolSearch` — `select:<jira.mcpPrefix>getAccessibleAtlassianResources,<jira.mcpPrefix>createJiraIssue,<jira.mcpPrefix>getTransitionsForJiraIssue,<jira.mcpPrefix>transitionJiraIssue` — whenever Step 10.5 has anything to do, which is nearly every first plan of an epic.
+Reads need no MCP — the script authenticates via `jira.credentialsFile`. **Writes to Jira do:** minting a story and moving a status (Step 10.5) go through the Atlassian MCP. Once Step 9 is confirmed, load them in ONE `ToolSearch` — `select:<jira.mcpPrefix>getAccessibleAtlassianResources,<jira.mcpPrefix>createJiraIssue,<jira.mcpPrefix>executeRead,<jira.mcpPrefix>transitionJiraIssue` — whenever Step 10.5 has anything to do, which is nearly every first plan of an epic.
 
 ## Step 4 — Cloud ID
 
@@ -395,7 +395,7 @@ Skip the step when Step 9 confirmed nothing to create and nothing to move. Other
    5. When the story came from adopted Idea Board entries, `update` each source entry's `storyKey`.
 
    ⚡ Batch the `createJiraIssue` calls in one message. Batch the `stub` calls into one `Bash` call. The stub and the move are independent, so either order is fine. Do both for every story before Step 11.
-2. **Move to `<jira.createStatus>`.** This covers every story just created, the epic if it is in Backlog, and the pre-existing Backlog stories the user did not keep parked. For each one, call `getTransitionsForJiraIssue`, pick the transition whose **name** is `<jira.createStatus>`, and call `transitionJiraIssue`. Never reuse a transition id from another board: the same id can name a different transition on each board. ⚡ Batch the reads in one message and the transitions in the next.
+2. **Move to `<jira.createStatus>`.** This covers every story just created, the epic if it is in Backlog, and the pre-existing Backlog stories the user did not keep parked. For each one, list its transitions with `<jira.mcpPrefix>executeRead(name="listJiraIssueTransitions", cloudId, inputs={issueIdOrKey: KEY}, responseFields=["transitions.id","transitions.name","transitions.to.name"])`, pick the transition whose target status (`to.name`) is `<jira.createStatus>`, and call `transitionJiraIssue(cloudId, issueIdOrKey=KEY, transitionId="<id>")`. Never reuse a transition id from another board: the same id can name a different transition on each board. ⚡ Batch the reads in one message and the transitions in the next.
 3. **Verify** with one `board --jql 'key = <epicKey> OR parent = <epicKey>'` call. Nothing that was meant to move should still read Backlog. Report any that do in Step 13 as a line, not silently.
 
 A failed create or move does not stop the plan: the wave plan and config still get written. Each failure is a line in the Step 13 summary.
