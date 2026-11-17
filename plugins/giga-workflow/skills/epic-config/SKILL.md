@@ -66,6 +66,7 @@ conventions       <count> item(s)
 designReferences  <"(none)" or summary of keys>
 epicEvolutionRules <count> board addenda, or "(canonical only)" when [] / "(opted out)" when null
 loop.unattendedAllowances <count> allowance(s), or "(none)" when absent or []
+loop.browserProfile <value or "(unset)">
 ─────────────────────────────────────────────────────
 ```
 
@@ -98,6 +99,7 @@ Parse the user's request and update the in-memory config object accordingly. Com
 | `set libraries.store to <path>` | Update nested `libraries.store` |
 | `set designReferences.<key> to <value>` | Update or create key in `designReferences` object |
 | `clear designReferences` | Set `designReferences` to `null` |
+| `set loop.browserProfile to <name>` | Set `loop.browserProfile`, creating `loop` when absent; the Chrome profile `/giga-workflow:epic-loop` connects once in Step 1.4. `clear loop.browserProfile` removes it |
 | `add allowance: <id>` | Append `{ "id", "narrows", "allows": [], "stillEscalates": [] }` to `loop.unattendedAllowances`, creating `loop` and the array when absent |
 | `edit allowance <id>` | Change that allowance's `narrows`, or add or remove its `allows` / `stillEscalates` items |
 | `remove allowance <id>` | Remove it; an empty array may be dropped |

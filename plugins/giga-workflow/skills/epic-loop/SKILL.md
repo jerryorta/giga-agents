@@ -100,6 +100,7 @@ Bind the `config.loop` block, applying these defaults when the field is absent:
 | `evolutionAudit` | `false` | run `/giga-workflow:epic-evolution-audit` before each ship |
 | `maxConsecutiveFailures` | `2` | consecutive non-`SHIPPED` outcomes before escalating |
 | `browserVerification` | `false` | story agents check UI changes in Storybook or the running app before shipping (contract §7); the run connects a browser once, in Step 1.4 |
+| `browserProfile` | unset | the Chrome profile the run connects in Step 1.4; story agents work in it and never switch |
 | `unattendedAllowances` | `[]` | this board's narrowings of `workflow.loop.neverUnattended` (contract §5.1); `[]` = every entry escalates in full |
 
 **`unattendedAllowances`** lets one board do unattended part of what `neverUnattended` hands to a
@@ -152,14 +153,17 @@ Run these before the first spawn. Any failure stops the run before a branch exis
    expected — Step 3a's resume checks it instead.
 2. **GitHub auth** — `gh auth status`. A 403 later is a run-level failure, not a story failure.
 3. **Jira reachable** — `python3 <plans.script> board --jql '<config.jql>'`.
-4. **Browser connected** (only when `loop.browserVerification`). This is the run's one interactive
+4. **Browser connected** (only when `loop.browserVerification` or `loop.browserProfile` is set). This is the run's one interactive
    moment, so it happens here, before anything starts. Every story agent drives the connection made
    here, and none of them may reconnect (contract §7).
    - Load `mcp__claude-in-chrome__tabs_context_mcp` and `mcp__claude-in-chrome__switch_browser` in
      one `ToolSearch`, then call `tabs_context_mcp`.
    - If no browser is selected, or several are connected, call `switch_browser` directly; do not ask
      which one. Say in one line that it is for the run's browser checks, so the user clicks Connect in
-     the `browser.runProfileLabel` profile. Then call `tabs_context_mcp` again.
+     the `loop.browserProfile` profile when set, else the `browser.runProfileLabel` profile. Then call
+     `tabs_context_mcp` again.
+   - When `loop.browserProfile` is set and the connected browser is not that profile, call
+     `switch_browser` so the user connects the named one.
    - Still unconnected → stop. Tell the user to re-run once Chrome is connected, or to set
      `loop.browserVerification: false` to run without browser checks.
 

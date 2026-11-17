@@ -342,7 +342,10 @@ browser once, before the first spawn, and every story agent drives that same con
   every tab it opened before it returns. Never trigger a JavaScript `alert`/`confirm`/`prompt`.
 - **Never call `switch_browser` or `select_browser`.** Either one puts a Connect prompt in front of a
   human who is not there. If `tabs_context_mcp` reports no connected browser, return `NEEDS_HUMAN`
-  with `blocker: "browser not connected"` and leave the work in place.
+  with `blocker: "browser not connected"` and leave the work in place. The run's single connection
+  is the board's `loop.browserProfile` when one is set. If the connected profile is not the one the
+  board names, or a check needs an account that profile is not signed in as, return `NEEDS_HUMAN`
+  (or record it in the `browser` report) and never type a password.
 - **Drive the UI only, never app code.** Act through rendered controls, as a user would. Never call
   application code from the page: no component or store methods (`ng.getComponent`, devtools hooks,
   `window` globals), no loops over an object's functions. Against live data such a call can run a
