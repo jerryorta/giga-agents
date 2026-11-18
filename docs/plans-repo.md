@@ -40,7 +40,7 @@ Some skills cite the guide by section number: §2 is the hybrid read (content fr
 
 ## The script
 
-Every call is `python3 <plans.script> <command> …`, so the script must run under `python3`. `ensure`, `section` and `stub` take one key per call. stdout carries only the result, because the skills capture it with `$(…)` or parse it as JSON. Messages go to stderr. Any failure exits non-zero.
+Every call is `python3 <plans.script> <command> …`, so the script must run under `python3`. `ensure`, `section`, `stub`, `transition` and `comment` take one key per call. stdout carries only the result, because the skills capture it with `$(…)` or parse it as JSON. Messages go to stderr. Any failure exits non-zero.
 
 ### `ensure <KEY>`
 
@@ -129,6 +129,39 @@ Replaces the Jira description with a one-line summary and a link to the plan fil
 - **stdout is ignored.** A failure exits non-zero: skills chain several stubs as `… stub ABC-124 && … stub ABC-125`.
 
 Called by `/giga-workflow:create-jira`, `/giga-workflow:epic-plan` (each new story, and the epic after a wave plan if you ask), `/giga-workflow:epic-story-complete` (each follow-up story) and `/giga-workflow:epic-story-ship`. `/giga-workflow:epic-evolution-audit` names it as a step for you and never runs it.
+
+### `transition <KEY> <status> [<status> ...]`
+
+Moves a ticket to a status, over the tracker's API and not through an MCP server, so a script can do it.
+
+- **Matches by target status name.** Reads the transitions the ticket offers, compares each one's target status name with the arguments, ignoring case and in the order given, and runs the first that matches. Never hard-code or guess a transition id, because ids differ per project and workflow.
+- **Idempotent.** If the ticket is already in one of the named statuses, it changes nothing and exits 0.
+- **stdout** is one line: the ticket's status name afterwards, such as `In Review`.
+- **No match.** Exit 1, with the current status and every reachable target status on stderr.
+- **Writes to Jira**, so the credentials need write access.
+
+```bash
+python3 <plans.script> transition ABC-124 "In Review"
+python3 <plans.script> transition ABC-124 Done "In Review"   # first reachable of the two
+```
+
+Called by the giga-workflow ship script (`/giga-workflow:epic-story-complete`).
+
+### `comment <KEY>`
+
+Posts a comment on a ticket from Markdown on stdin.
+
+- **stdin** is the Markdown body. An empty body is an error.
+- **Markdown handled:** `#`, `##` and `###` headings, paragraphs split by blank lines, `- ` bullet lists, `[text](url)` links and `` `inline code` ``. Anything else is posted as plain text.
+- **stdout** is the new comment's id. A failure exits non-zero.
+- **`--dry-run`** prints the comment body in the tracker's document format and posts nothing, for offline tests.
+- **Writes to Jira**, so the credentials need write access.
+
+```bash
+printf '### Merged\n\nPR: [#12](https://example.com/pull/12)\n' | python3 <plans.script> comment ABC-124
+```
+
+Called by the giga-workflow ship script (`/giga-workflow:epic-story-complete`).
 
 ## The plan file
 
@@ -230,6 +263,8 @@ A script meets this contract when:
 - [ ] `board` prints one JSON array with the seven fields, live, every match, in the query's order. It should print `[]` only when the query ran and matched nothing, and it answers every JQL shape in the table ([`board`](#board---jql-jql)).
 - [ ] `section` matches `## ` headings by prefix, ignoring case, and includes their subsections. It reports 1-based, inclusive line ranges, prints `<path> <start> <end>` with `--range`, and exits 1 only when nothing matched, still naming the path on stderr ([`section`](#section-key-heading---range)).
 - [ ] `stub` replaces the Jira description with a summary and a link to the file, and exits non-zero on failure ([`stub`](#stub-key)). It should refuse a key whose file does not exist.
+- [ ] `transition` moves a ticket to the first named status it can reach, matching each transition's target status name ignoring case, never an id. It does nothing and exits 0 when the ticket is already in a named status, prints the resulting status name, and exits 1 listing the reachable statuses when none match ([`transition`](#transition-key-status-status-)).
+- [ ] `comment` reads Markdown on stdin, posts it as a comment, prints the new comment's id, and prints the body instead of posting with `--dry-run` ([`comment`](#comment-key)).
 - [ ] The plans repo is a git repo with board folders at its root and one `<board>/<KEY>.md` per ticket, in the shape under [The plan file](#the-plan-file).
 
 Then set `plans.repo` and `plans.script` in `.claude/giga/config.json`. Set `plans.autoPush` to `true` only when the repo pushes its own commits.
