@@ -141,12 +141,12 @@ class ShipTest(unittest.TestCase):
             f.write_text(json.dumps(value))
         return json.loads(f.read_text())
 
-    def board(self, mode="pr"):
+    def board(self, mode="pr", name="abc"):
         giga = self.work / ".claude/giga"
         giga.mkdir(parents=True, exist_ok=True)
         (giga / "config.json").write_text(json.dumps({"workflow": {
             "plans": {"repo": str(self.plans), "script": str(self.tmp / "plans.py"), "autoPush": True}}}))
-        (giga / "epic.abc.json").write_text(json.dumps({
+        (giga / f"epic.{name}.json").write_text(json.dumps({
             "epicKey": "ABC-100", "mergeMode": mode, "jql": 'parent = ABC-100 AND status = "To Do"',
             "groupLabel": "Wave", "completionMessage": "All done"}))
         (self.work / ".git/info/exclude").write_text(".claude/\n")
@@ -155,8 +155,8 @@ class ShipTest(unittest.TestCase):
         self.git("checkout", "-q", "-b", "feat/abc-1-first")
         (self.work / "a.txt").write_text("two\n")
 
-    def ship(self, until="merged", **extra):
-        handoff = {"board": "abc", "key": "ABC-1", "until": until, "nextStory": True,
+    def ship(self, until="merged", board="abc", **extra):
+        handoff = {"board": board, "key": "ABC-1", "until": until, "nextStory": True,
                    "commit": {"subject": "feat(web): ABC-1 do the first thing", "trailer": "Co-Authored-By: t"},
                    "prBody": "## Summary\n- x\n", "shipped": "did the first thing",
                    "outcome": {"text": "It shipped.", "pins": ["x holds — pinned by `a.spec.ts`"]}, **extra}
@@ -185,6 +185,15 @@ class ShipTest(unittest.TestCase):
         self.assertIn("## Shipped\n\n- ABC-1 — did the first thing *(Wave 1; PR #1)*", epic)
         self.assertEqual(self.git("log", "-1", "--format=%s", cwd=self.plans), "docs(abc): ABC-1 shipped")
         self.assertIn("Effort:    high", out)
+
+    def test_board_name_differs_from_key_prefix(self):
+        self.board(name="abc2")
+        self.story()
+        code, out, res = self.ship(board="abc2")
+        self.assertEqual(code, 0, out)
+        self.assertIn("abc/ABC-1.md § Outcome", out)
+        self.assertEqual(self.git("log", "-1", "--format=%s", cwd=self.plans), "docs(abc): ABC-1 shipped")
+        self.assertEqual(self.git("status", "--short", cwd=self.plans), "")
 
     def test_pr_review_stops_at_in_review(self):
         self.board()

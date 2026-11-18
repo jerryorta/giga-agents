@@ -73,6 +73,7 @@ class Ctx:
             raise Stop("preflight", f"no {board_file.name} (boards: {boards})", "nothing done")
         b = json.loads(board_file.read_text())
         self.board, self.key = board, key.upper()
+        self.plans_dir = self.key.split("-")[0].lower()
         self.krx = f"{self.key}([^0-9]|$)"
         g = wf.get("git", {})
         self.main = g.get("mainBranch", "main")
@@ -497,7 +498,7 @@ class Ship:
             if sk and sk not in head:
                 new = head[:-1] + f" · {c.sk_name} {sk})" if head.endswith(")") else head + f" · {c.sk_name} {sk}"
                 plan.write_text(text.replace(head, new, 1))
-            self.row("Outcome", f"{c.board}/{c.key}.md § Outcome already recorded")
+            self.row("Outcome", f"{c.plans_dir}/{c.key}.md § Outcome already recorded")
             return
         if not o.get("text"):
             self.row("Outcome", "not written — the handoff has no outcome text")
@@ -507,8 +508,8 @@ class Ship:
         if pins:
             block += "\n### Pinned\n\n" + "".join(f"- {p}\n" for p in pins)
         plan.write_text(text.rstrip("\n") + "\n" + block)
-        self.row("Outcome", f"{c.board}/{c.key}.md § Outcome ✓ ({len(pins)} pin(s))" if pins else
-                 f"{c.board}/{c.key}.md § Outcome ✓ — nothing pinned")
+        self.row("Outcome", f"{c.plans_dir}/{c.key}.md § Outcome ✓ ({len(pins)} pin(s))" if pins else
+                 f"{c.plans_dir}/{c.key}.md § Outcome ✓ — nothing pinned")
 
     def story_epic(self):
         try:
@@ -607,7 +608,7 @@ class Ship:
         c = self.c
         if not c.plans_repo:
             return
-        git("-C", c.plans_repo, "add", f"{c.board}/")
+        git("-C", c.plans_repo, "add", f"{c.plans_dir}/")
         if git("-C", c.plans_repo, "diff", "--cached", "--quiet")[0] == 0:
             self.row("Plans", "nothing to commit")
             return
@@ -787,7 +788,7 @@ class Ship:
             self.shipped_line(epic, done_stamp, remove_wave=remove_wave)
             self.close_epic(epic)
             self.sweep_plan_files()
-        self.plans_commit(f"docs({c.board}): {c.key} {'shipped' if done_stamp or c.mode == 'epic-branch' else 'outcome'}{suffix}")
+        self.plans_commit(f"docs({c.plans_dir}): {c.key} {'shipped' if done_stamp or c.mode == 'epic-branch' else 'outcome'}{suffix}")
         if done_stamp:
             self.secrets()
         self.storybook()
