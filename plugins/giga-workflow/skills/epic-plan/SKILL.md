@@ -54,13 +54,13 @@ Neither directive → `mergeMode` resolves in Step 10 (base config, then the boa
 Read all files matching `.claude/giga/epic.*.json`. For each file, read the `epicKey` field and extract its prefix. Find the file whose prefix matches the argument's prefix.
 
 - **Match found** → the board name is the `*` portion of the filename (e.g., `epic.abc.json` → `abc`). Load the entire matching config as the **base config** to carry forward unchanged fields (e.g., `app`, `libraries`, `conventions`, `designReferences`).
-- **No match** → board name = lowercase of the prefix (e.g., `XYZ` → `xyz`). A new config will be created from scratch; prompt the user after Step 9 to fill in the app/library paths. When `boardTemplate` names a file that exists, seed the new config from it instead: load that file as the **base config**, drop every key that starts with `_`, and hold their text as `templateNotes` for the Step 9 gate (`baseFromTemplate = true`). Step 12 still writes `name`, `epicKey`, `jql`, `completionMessage` and the other epic-specific fields from this epic.
+- **No match** → board name = lowercase of the prefix (e.g., `XYZ` → `xyz`). A new config will be created from scratch; prompt the user after Step 9 to fill in the app/library paths. **When `boardTemplate` names a file that exists:** read `${CLAUDE_SKILL_DIR}/board-template.md` and follow it.
 
 Save: `epicKey`, `boardName`, `baseConfig` (may be null), `baseFromTemplate`, `templateNotes`, `mergeModeArg`.
 
 ## Step 3 — Plans-repo access (board nav + content — NOT the MCP)
 
-Board navigation and ticket content come from the **plans repo** (`plans.repo`), not the Atlassian MCP (which returns a ~5.5k-char fat envelope per issue and ignores field-narrowing — a query for an epic's children is tens of KB). Canonical guide: the plans guide (`plans.guide`). Two commands:
+Board navigation and ticket content come from the **plans repo** (`plans.repo`), not the Atlassian MCP. Canonical guide: the plans guide (`plans.guide`). Two commands:
 
 - **Board nav** (child list + live status): `python3 <plans.script> board --jql '<jql>'` → JSON `[{key,status,category,type,priority,parent,summary}]` (live status, ~200 B/issue).
 - **Ticket content** (epic/story description): `python3 <plans.script> ensure <KEY>` prints the local `<prefix>/<KEY>.md` path (migrating on-miss); then `Read` it.
@@ -80,44 +80,7 @@ Before this skill overwrites `epic.<boardName>.json`, check whether the **previo
 - `baseFromTemplate` (a new board seeded from the board template), OR
 - `baseConfig.epicKey === epicKey` (re-planning the same epic, not switching to a new one)
 
-Otherwise:
-
-1. Fetch the existing config's epic status:
-   ```
-   python3 <plans.script> board --jql 'key = <baseConfig.epicKey>'
-   ```
-   → one-row JSON with the epic's `summary` + **live** `status`.
-2. Inspect the row's `status` (or `category`):
-   - **Done** → safe to overwrite. Note in the Step 9 confirmation block: "Replacing config for completed epic `<baseConfig.epicKey>` (Done)."
-   - **Not Done** (Backlog / To Do / In Progress / In Review / etc.) → **ask the user before continuing.**
-
-3. If the existing epic is not Done, ask via `AskUserQuestion` (or plain prompt if not loaded):
-
-   ```
-   The existing config at .claude/giga/epic.<boardName>.json points at
-   <baseConfig.epicKey> (<baseConfig.name>) — currently <status> in Jira (NOT Done).
-
-   Repointing it strips the /giga-workflow:epic-next <boardName> and /giga-workflow:epic-story-complete <boardName>
-   shortcuts that anyone working on <baseConfig.epicKey> depends on.
-
-   Options:
-     [A] Repoint this board at <argEpicKey> — one board per domain.
-         <baseConfig.epicKey> keeps its stories and plan file, and gets its
-         <boardName> shortcut back when the board is repointed at it.
-     [B] Add a second board, for a parallel track you approve, at:
-         .claude/giga/epic.<boardName>-<argEpicKey-lowercase>.json
-         (board name becomes "<boardName>-<argEpicKey-lowercase>", invoked as
-         /giga-workflow:epic-next <boardName>-<argEpicKey-lowercase>)
-         Both epics keep working shortcuts.
-
-   Default: [A]. A second board for one domain forks its conventions, and they drift.
-   ```
-
-4. Record the user's choice as `configFileMode`:
-   - `"overwrite"` → Step 12 writes to `epic.<boardName>.json` (replaces the existing config).
-   - `"alternate"` → Step 12 writes to `epic.<boardName>-<argEpicKey-lowercase>.json` (new file alongside the existing one). The effective board name for the rest of the skill becomes `<boardName>-<argEpicKey-lowercase>` (used in summary output, completion message defaults, etc.).
-
-5. If `configFileMode === "alternate"`, **do not** carry `app`, `libraries`, `routingFiles`, `conventions` forward from the existing baseConfig blindly — those describe the workspace and stay valid, but the user should confirm in Step 9. (For a same-domain alternate epic they're typically still right; record them as "carried forward (same workspace)" in the Step 9 disclosure.)
+**When none of the skip conditions above holds:** read `${CLAUDE_SKILL_DIR}/baseconfig-in-flight.md` and follow it.
 
 ## Step 5 — Fetch the epic
 
@@ -143,9 +106,7 @@ Run the same query for the epic itself (`board --jql 'key = <epicKey>'`, in the 
 
 ## Step 6.5 — Classify the epic + detect existing description content
 
-**Why this step exists.** The route-depth heuristic in Step 7 is right for Angular UI epics (page builds, feature shells, route trees) but **wrong for backend / foundation / dependency-driven epics** (data pipelines, schema work, infrastructure). For the latter, route depth produces nonsense waves because most stories don't create routes at all. This step picks the right analysis path before the heuristic runs.
-
-**Why this also exists.** Step 11 writes back to the epic description. If the description already has substantial curated content (Reference docs, Locked decisions, Constraints, hand-built Wave Plan, etc.), a blind rewrite can clobber it. This step records what's there so Step 9 can ask before overwriting.
+**Why this step exists.** The route-depth heuristic in Step 7 is **wrong for backend / foundation / dependency-driven epics**, whose stories mostly create no routes; this step picks the right analysis path first. It also records existing curated description content so Step 9 can ask before Step 11 overwrites it.
 
 ### 6.5a — Classify the epic
 
@@ -189,14 +150,7 @@ An epic's shape is cheapest to change before its stories are cut and waved, so t
 
 Skip this step when `ideas.board` is absent: no agents are spawned, Step 9 has no Challenge block or question 6, and the Step 13 summary says Step 6.7 was skipped because the repo has no Idea Board.
 
-1. **Read what is already decided.** Load `ArtifactData` (`ToolSearch` `select:ArtifactData`) and `query` the Idea Board's (`ideas.board`) `ideas` collection where `board == <boardName>`. Hold three lists: `adopted` with no `storyKey` (candidate stories when they serve this epic's goal), `parked` (re-weighed only with new evidence), and `declined` (never re-proposed; their titles and reasons go to the agents below). Keep the whole result, `proposed` included, and the board's open tickets (`python3 <plans.script> board --jql 'project = <KEY> AND statusCategory != Done'`) for step 4's match check.
-2. **Read the last epic review.** When `baseConfig` points at a different epic that is Done (Step 4.5), read that epic's plan file for its `## Epic review` section. When there is none, Step 9 says so and recommends `/giga-workflow:epic-review <baseConfig.epicKey>` first. The owner may skip it.
-3. **Spawn two read-only agents in one message** (`general-purpose`, `model: sonnet`). Give each the epic plan file path, the child list with summaries, the app and its dev-server port, the brand's voice guide path (from `ux.brandVoice.guides[]`, or "none yet"), the declined titles and reasons, the last epic review, and the idea rules. Story-order and gating notes come back for the plan file, never as ideas.
-   - **Red team** — argue against the epic. Which stories have no user job behind them, duplicate what the app already does, or make its navigation or its model of the work worse? What does the epic's own goal need that no story covers? Read usage for the area (sources in the ideas policy) and cite numbers with their source and date range. Return the cuts, fixes or adds that have observed evidence, most severe first, or "no cuts, no adds — the epic covers its goal".
-   - **Domain expert** — be the app's real user (the voice guide's audience; with none, the users the app's onboarding and marketing describe). Walk the jobs this epic serves the way that person actually does the work, and say where the stories miss it. Act out the jobs in the running app or its source; do not role-play opinions. Return the adds or cuts that have observed evidence, most severe first, each with its job, or none.
-   - **Section review** (optional, when a story reworks a section or page that is already live): one `giga-ux:ux-reviewer` per such section, in `giga-ux:ux-design` § Section review mode. Its one batched list is a single `fix` candidate for step 4.
-4. **Merge and rank.** Rank the entries across all agents by severity, most severe first; the stopping test is the only gate and zero is a valid result. When more than a handful survive, say so in the report with a one-line reason. Drop any that fails the ideas policy's § Entry threshold, and any that repeats a declined idea without new evidence answering its decline reason. Drop any that an open ticket or an Idea Board entry of any status already names (the ideas policy's § Check for a match first; also grep `<plans.repo>/<board>/*.md`): record "covered by <key or id>" in the report and the epic's plan file, with any evidence the match lacks, and never edit the match. Story-order and gating notes go to the epic's plan file (Step 11), never the board.
-5. **Write each survivor to the Idea Board** (`set`, `status: "proposed"`, `source: "epic-plan"`, this epic's key) and hold them as `challengeIdeas` for Step 9.
+**When `ideas.board` is set:** read `${CLAUDE_SKILL_DIR}/challenge.md` § "Steps 1–5" and follow it.
 
 ---
 
@@ -216,16 +170,7 @@ For **each story**, read its description and extract:
 
 ### 7b — Dependency-driven path (for backend / foundation epics)
 
-For **each story**, read its description and extract:
-
-1. **Explicit dependencies** — match patterns like `depends on ABC-XXX`, `blocked by ABC-XXX`, `prerequisite: ABC-XXX`. Build a directed edge from the dependency to this story.
-2. **Implicit dependencies** — if a story description names a piece of infrastructure another story is building (e.g., "uses the `events` table from ABC-253"), add an edge from the building story to this consumer.
-3. **Sibling conflict** — same as route-driven (two stories touching the same file = sequential within a wave).
-
-Then build a **directed acyclic graph** (DAG) of stories. Topological depth (longest path from any root) becomes the wave assignment:
-- Stories with no incoming edges → Wave 1
-- Stories whose dependencies are all in Wave N → Wave N+1
-- Cycles flagged as errors (must resolve before continuing).
+**When `epicType` is `"dependency-driven"`, `"mixed"` or `"unknown"`:** read `${CLAUDE_SKILL_DIR}/dependency-driven.md` and follow it.
 
 ### 7c — Mixed / unknown path
 
@@ -237,21 +182,7 @@ A story whose scope spans the backend (functions, rules, indexes, seed tooling u
 `planning.backendGlobs`) AND the frontend (`planning.frontendGlobs`, the app) is split
 before it is waved.
 
-**The backend story** carries the functions, rules, indexes, seed, and the models / API contract the
-frontend codes against. It is **always first**: every frontend story from the split depends on it (an
-edge in the 7b DAG; ahead of them in a sequential wave on the route-driven path).
-
-**The frontend story or stories** follow — one per layer (store vs UI) when each stands alone — and,
-once the backend story has merged, run in parallel (separate clones / sessions).
-
-Why: one multi-layer story runs its layers serially in one session whose context only grows; split, each
-layer is its own session and the frontend layers run in parallel.
-
-Skip the split only when the frontend change is a thin consumer of the backend change (a handful of
-files) — say so in Step 9.
-
-Proposed splits are presented in Step 9 and minted by Step 10.5 only after the user confirms, before Step
-11 writes the wave plan; the original ticket becomes the backend story.
+**When a story spans the backend and the frontend:** read `${CLAUDE_SKILL_DIR}/split-layers.md` and follow it.
 
 ## Step 8 — Organise into waves
 
@@ -349,7 +280,7 @@ Then call `ExitPlanMode`. Ask the user these questions explicitly (use AskUserQu
 3. **Description-rewrite policy** — "Pick A / B / C / D from the policy options above (default: `<recommendation>`)."
 4. **Split confirmation** — "Accept the proposed splits (backend first), amend, or skip?" — and, for an epic with no children yet, "Create these stories?"
 5. **Existing Backlog stories** (only when the epic already has children in Backlog) — "Move <KEYs> to <jira.createStatus>, or leave any parked?" The default is to move them: in this workflow every story gets worked, and `/giga-workflow:epic-next` cannot see a Backlog story. The question exists because a story the user parked on purpose stays parked (evolution rule 3).
-6. **Challenge ideas** (only when Step 6.7 has any) — "Adopt, park or decline each one, here or on the Idea Board." Record each decision on the board (`ideas.board`; `update` `status`, `decision`, `decidedAt`); a decline needs a one-line reason. An adopted `add` joins "Stories to create"; an adopted `cut` removes or parks the story it names; an adopted `fix` becomes a story or an edit to the sibling whose scope it is. There is no one-to-one card-to-story ratio: group adopted entries into stories that make sense to build together. Cosmetic fixes on one page go in one story; entries that share a page, component or flow may share one too, at your judgement. Each story lists its source entry ids. Nothing the owner did not adopt changes the plan, and no idea is minted as a story any other way.
+6. **Challenge ideas** (only when Step 6.7 has any) — read `${CLAUDE_SKILL_DIR}/challenge.md` § "Step 9 question 6" and follow it.
 7. **Seeded board** (only when `baseFromTemplate`) — "Keep the seeded `app`, `libraries`, `routingFiles`, `buildCommand`, `commitScope` and `conventions`, or adjust them to the shape the template notes describe?"
 
 Proceed to Step 10 ONLY when all of them are answered. If the user amends the wave plan or the splits, re-present and re-confirm before writing.
@@ -376,27 +307,17 @@ parent = <epicKey> AND status = "<jira.createStatus>"
 
 **Completion message:** `"All <epicKey> stories are complete!"`
 
-**Hybrid mode:** carry forward from `baseConfig.hybridMode` if it exists (a legacy `true` is written as `"conditional"`); otherwise `false`. `false` = `/giga-workflow:epic-loop` ships every story unattended. Use `"conditional"` when stories' Phase 6/7 verification requires `/giga-workflow:epic-cross-actor-test`, which needs two browser profiles and a human: `/giga-workflow:epic-loop` then pauses on those stories and ships the rest unattended. A story whose need is already known can carry `crossActor: true` (or a scenario string) or `crossActor: false` in its front matter, and that overrides the loop's triage. A story that follows an established pattern (no new design, shared primitive or cross-library refactor) can carry an optional `model: sonnet` (or `opus` / `haiku`), which `/giga-workflow:epic-loop` uses for that story's agent. Surface a one-line note in the Step 13 summary so the user knows to hand-edit the field if the epic actually needs hybrid mode.
+**Hybrid mode:** carry forward from `baseConfig.hybridMode` if it exists (a legacy `true` is written as `"conditional"`); otherwise `false`. `false` = `/giga-workflow:epic-loop` ships every story unattended. **When stories' Phase 6/7 verification may need `/giga-workflow:epic-cross-actor-test`, or a story carries `crossActor` / `model` front matter:** read `${CLAUDE_SKILL_DIR}/hybrid-mode.md` and follow it.
 
 **App/library/convention/designReferences fields:** carry forward from `baseConfig` unchanged, as is every key it holds that the Step 12 skeleton does not list (e.g. `crossActor`, `domainMemoryIndex`). If `baseConfig` is null (new board), set placeholder values and note them to the user after writing.
 
 ## Step 10.5 — Create the confirmed stories and move statuses to `<jira.createStatus>`
 
-**Why this step exists.** `/giga-workflow:epic-next` picks only stories in `<jira.createStatus>`, but Jira can create a new issue in **Backlog**. A story minted without a move to `<jira.createStatus>` is invisible to `/giga-workflow:epic-next`. With this config's `status = "<jira.createStatus>"` JQL, `/giga-workflow:epic-next` then reports the epic complete before any work has started. An epic left in Backlog reads as parked on the board while it is the one being worked.
+**Why this step exists.** `/giga-workflow:epic-next` picks only stories in `<jira.createStatus>`, but Jira can create a new issue in **Backlog**, where it is invisible and `/giga-workflow:epic-next` reports the epic complete before any work has started. An epic left in Backlog reads as parked while it is the one being worked.
 
 Skip the step when Step 9 confirmed nothing to create and nothing to move. Otherwise load the MCP tools (Step 3) and fetch `cloudId` once, then:
 
-1. **Create each confirmed story** (no-children cut, or a Step 7.5 split), born-split per the plans guide (`plans.guide`) §5:
-   1. `createJiraIssue` with `parent=<epicKey>`, the type and the summary. Read the `key`.
-   2. `Write` its content to `<plans.repo>/<board>/<KEY>.md`: front matter `jira/project/board/type/epic/summary`, plus the scope and acceptance, and its source Idea Board entry ids when it has any.
-   3. Move it to **`<jira.createStatus>`** (step 2 below) when it is not already there.
-   4. Run `python3 <plans.script> stub <KEY>`.
-
-   5. When the story came from adopted Idea Board entries, `update` each source entry's `storyKey`.
-
-   ⚡ Batch the `createJiraIssue` calls in one message. Batch the `stub` calls into one `Bash` call. The stub and the move are independent, so either order is fine. Do both for every story before Step 11.
-2. **Move to `<jira.createStatus>`.** This covers every story just created, the epic if it is in Backlog, and the pre-existing Backlog stories the user did not keep parked. For each one, list its transitions with `<jira.mcpPrefix>executeRead(name="listJiraIssueTransitions", cloudId, inputs={issueIdOrKey: KEY}, responseFields=["transitions.id","transitions.name","transitions.to.name"])`, pick the transition whose target status (`to.name`) is `<jira.createStatus>`, and call `transitionJiraIssue(cloudId, issueIdOrKey=KEY, transitionId="<id>")`. Never reuse a transition id from another board: the same id can name a different transition on each board. ⚡ Batch the reads in one message and the transitions in the next.
-3. **Verify** with one `board --jql 'key = <epicKey> OR parent = <epicKey>'` call. Nothing that was meant to move should still read Backlog. Report any that do in Step 13 as a line, not silently.
+**When Step 9 confirmed anything to create or move:** read `${CLAUDE_SKILL_DIR}/create-and-move.md` and follow it.
 
 A failed create or move does not stop the plan: the wave plan and config still get written. Each failure is a line in the Step 13 summary.
 
@@ -416,7 +337,7 @@ If no `## Wave Plan` heading exists despite the policy, fall back to Policy B.
 
 ### Policy B — Append a new `## Wave Plan` section
 
-Append the rendered wave plan as a new section at the end of the description. Existing content (including any old wave plan if present — leave it as historical context) stays.
+**When the user picked B:** read `${CLAUDE_SKILL_DIR}/rewrite-policies.md` § "Policy B" and follow it.
 
 ### Policy C — Skip
 
@@ -424,19 +345,11 @@ Do nothing here. The config in Step 12 still gets written.
 
 ### Policy D — Full rewrite (only after the destructive-warning re-confirm in Step 9)
 
-Replace the entire description with a freshly-rendered version. This is the legacy behavior; only use it when the user explicitly asked for it.
+**When the user picked D:** read `${CLAUDE_SKILL_DIR}/rewrite-policies.md` § "Policy D" and follow it.
 
 ### Cross-epic blockers (`blocked_by`)
 
-When the epic depends on another board's epic, its plan file carries a `### Wave 0 — Blocked by <KEY> (redirect)`
-section, and `blocked_by: [<KEY>]` in the epic's front matter when the whole epic waits.
-
-- **Every policy keeps Wave 0 verbatim** as the first wave. It is not a child of this epic, so it never enters the
-  Step 7/8 analysis.
-- When only some stories wait (Wave 0 names them), write `blocked_by: [<KEY>]` into each of those stories' front
-  matter in the same pass. Newly minted stories get it at creation.
-
-`/giga-workflow:epic-next` Step 7.5 and `/giga-workflow:epic-loop` 2a read these to redirect blocked work to the blocker's board.
+**When the epic's plan file has a `Wave 0` section or a story carries `blocked_by`:** read `${CLAUDE_SKILL_DIR}/cross-epic-blockers.md` and follow it.
 
 ### Wave plan rendering format (Markdown)
 
@@ -505,10 +418,7 @@ and are sent by that skill on every run. Do **not** write them here.
   canonical rule.
 - `null` still means the board opted out of evolution propagation entirely. `[]` is not an opt-out.
 
-This field once held a verbatim copy of the canonical four in every board — seven byte-identical
-copies of the same 1.6KB, written by this step on every re-plan. They drifted: one board lost the
-discovery rule and forked a weaker epic-description rule. Restating them here is what regenerates
-that drift, which is why this step no longer does it.
+Restating the canonical four here regenerates the drift that once forked them across boards, so this step never does.
 
 If `baseConfig` was null (new board), output a warning listing the fields that need to be filled in manually: `app`, `libraries`, `routingFiles`, `conventions`, `buildCommand`. When the board template seeded them (`baseFromTemplate`), list the same fields and `commitScope` as `seeded from <boardTemplate> — confirm` instead.
 

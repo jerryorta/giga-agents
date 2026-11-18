@@ -3,8 +3,6 @@ name: jira
 description: "Work on a Jira ticket: read ticket details, create a feature branch, plan the implementation, update the ticket with technical details, and start coding: $ARGUMENTS"
 ---
 
-Work on a Jira ticket: read ticket details, create a feature branch, plan the implementation, update the ticket with technical details, and start coding: $ARGUMENTS
-
 ## Project config
 
 Repo-specific values come from `.claude/giga/config.json` at the repository root, under `workflow` (plus the top-level `ideas` and `ux` keys every plugin shares). Read it once at the start. A missing file or field takes the fallback below, never a guess.
@@ -57,10 +55,7 @@ Add the Stitch trio to that same call **only when the ticket actually carries a 
 
 ## Subagent budget
 
-A subagent's bill is **its turn count × its context size × its model rate** — it is not a flat fee,
-and it does not shrink because the task was small. Measured across epic sessions,
-subagents are 44% of all tokens and Opus subagents alone are 67% of the subagent total. Three rules
-follow, and every phase below applies them:
+A subagent's bill is **its turn count × its context size × its model rate**, not a flat fee. Three rules follow, and every phase below applies them:
 
 1. **Settle a question in the main context when a shell command can settle it.** An agent spawned to
    confirm something `git log` already proves costs millions of tokens to say "yes".
@@ -74,10 +69,7 @@ Never spend an agent on reformatting context you already hold.
 
 ## One turn, many calls
 
-The same `turns × context` arithmetic governs your *own* context, and it is the larger of the two
-bills in practice. Measured on a real run of this chain: **491 tool calls across 491 turns** — a mean
-of exactly 1.00, so no independent pair was ever batched, and each call re-read a ~474k context to
-run a two-line shell command.
+The same `turns × context` arithmetic governs your *own* context, and it is the larger of the two bills: every call re-reads the whole context.
 
 The phases below are numbered for reading order, **not** for one-call-per-message execution:
 
@@ -176,44 +168,7 @@ Explicit batch points are marked ⚡.
 
 ## Phase 2.5: Fetch Design Comps
 
-Before planning, extract any design references from the ticket and load the comp content so it informs the implementation plan.
-
-### Detect design references
-
-Scan the ticket description and comments for:
-
-- **Stitch links** — any mention of a Stitch project/screen ID or URL (a Stitch URL, `stitch project`, a `projectId` / `screenId`)
-- **Figma links** — any `figma.com/file/...` or `figma.com/design/...` URL
-
-### Fetch Stitch comps (if found)
-
-Only when the Stitch MCP tools are available in the session; otherwise report the reference to the user and continue.
-
-1. Load the project overview:
-   ```
-   mcp__stitch__get_project(projectId)
-   ```
-2. List all screens:
-   ```
-   mcp__stitch__list_screens(projectId)
-   ```
-3. For each screen referenced in the ticket (or all screens if the ticket says "all"), fetch the full screen spec:
-   ```
-   mcp__stitch__get_screen(projectId, screenId)
-   ```
-4. **Summarize the comps** — layout, component names used, color tokens, spacing, typography, interactive states. Keep this summary concise; it will be passed into the planning context.
-
-### Fetch Figma comps (if found)
-
-Use `WebFetch` to retrieve the Figma embed URL or use the Figma share URL directly if it is publicly accessible. Capture the design description, component names, and any annotated specs visible from the URL. If the link requires auth (returns a login page), report to the user:
-
-> "Figma link found but requires authentication — please paste the relevant comp screenshot or description."
-
-Then wait for the user to supply it before proceeding.
-
-### No design reference
-
-If the ticket contains no Stitch or Figma reference, skip this phase and proceed to Phase 2.75.
+**When the ticket description or comments carry a Stitch or Figma reference (otherwise skip to Phase 2.75):** read `${CLAUDE_SKILL_DIR}/design-comps.md` and follow it.
 
 ---
 
@@ -247,13 +202,7 @@ calls.
    `docs/…` or `scripts/…` path and every `file:N` reference. Call the path set `ANCHORS`.
 
 2. **Date the description.** The plan file is version-controlled, so its last write *is* the moment
-   the description was authored:
-   ```
-   PF=<plans.repo>/<prefix>/<KEY>.md
-   N=$(git -C <plans.repo> rev-list --count HEAD -- "$PF")
-   DESC_TS=$(git -C <plans.repo> log -1 --format=%cI -- "$PF")
-   ```
-
+   the description was authored (`DESC_TS`, below; `N` is the file's commit count):
    ⚠️ **`N <= 1` means the timestamp is worthless.** Phase 1's `ensure` migrates a missing file, so a
    single-commit history dates the *migration*, not the authoring — the description may have been
    written in Jira months earlier. Treat `N <= 1` as INCONCLUSIVE and go straight to 2.75b. Same if
@@ -300,17 +249,7 @@ at a time, and turns are the cost multiplier.
 Prompt template:
 
 ```
-You are the pre-implementation re-validation agent for a Jira ticket about to be coded.
-
-Your job: read the ticket description, ground every code anchor in the current repo
-state, and decide whether the description is still actionable AS-IS.
-
-If it is, return ALIGNED.
-
-If it is not, infer the ORIGINAL INTENT of each drifted instruction (what was the
-author trying to achieve?), then write a REVISED description that achieves the same
-intent against the current code. Be conservative — when intent is ambiguous, flag it
-as an open question rather than guess.
+Read `${CLAUDE_SKILL_DIR}/revalidation-agent.md` in full and follow it.
 
 ## Ticket
 
@@ -321,118 +260,11 @@ Description (current, from Jira):
 
 ## Pre-computed evidence
 
-The orchestrator already ran the deterministic gate. Start from these results — do NOT re-derive
-them, and do NOT survey the wider repo:
-
 Description last written: <DESC_TS>
 Anchored paths that no longer exist:
 <MISSING list, or "none">
 Commits touching the anchored paths since the description was written:
 <git log --oneline output, or "none">
-
-Confine your investigation to the anchors named in the description and the commits listed above. If
-that evidence is marked "none" for both, the only drift classes still open are semantic ones
-(reshaped-in-place, already-done) inside the listed commits — check those and stop.
-
-## Audit dimensions (priority order)
-
-PRIMARY — these are the must-audit anchors:
-
-1. **Every explicit file path** mentioned in the description (every `libs/...`,
-   `apps/...`, or relative path mention). For each:
-   - Does the file exist at that path TODAY? (Read / Bash `ls`)
-   - If not, has it been moved or renamed? (Bash `git log --diff-filter=R --follow`,
-     `git log --diff-filter=D`, or grep the new tree for a matching basename)
-   - Was it deleted with no replacement?
-
-2. **Every line-number reference** of the form `file:N` or `file.ts:N` in the
-   description. For each:
-   - Read that exact line in the current file.
-   - Does its content still match what the description claims is there?
-   - If not, grep the file for the description's claimed content — has it shifted to
-     a different line, or has it vanished entirely?
-   - Distinguish line-number-drift (same content, different line) from
-     structural-drift (content gone or changed).
-
-SECONDARY — these are confirmatory signals, audited in service of the primary anchors:
-
-3. Function / class / type / interface / slice / facade / selector / route /
-   Firestore path / callable names mentioned alongside primary anchors. Confirm
-   each still exists and matches the description's claimed shape (signature,
-   members, location).
-
-4. Acceptance-criteria items that reference any of the above.
-
-## What to look for
-
-For each anchor in the primary set, classify drift as one of:
-- **Renamed** — same conceptual thing, new name; description should refer to the new name
-- **Moved** — same content, different path; description's path should update
-- **Removed-and-replaced** — original is gone; a sibling story shipped the replacement
-- **Removed entirely** — gone with no replacement; description's premise is broken
-- **Reshaped** — still there but signature/fields/types differ from the description
-- **Already done** — the work the description proposes is already in the code
-- **Line-shifted** — same content, different line number; trivial fix to the description
-- **Now-obsolete** — a sibling story made the proposed work irrelevant
-
-## Output
-
-Return exactly one of two structured blocks:
-
-REVALIDATION_RESULT_START
-Verdict: ALIGNED
-(no further content)
-REVALIDATION_RESULT_END
-
-OR
-
-REVALIDATION_RESULT_START
-Verdict: DRIFTED
-
-Drift findings:
-  - <anchor (path or path:line)> — <drift class from above> — <one-line impact on the description>
-    Source quote: "<verbatim substring from the description that introduced this anchor>"
-  - ...
-
-Intent inference (per drifted section of the description):
-  - § <section name> — Original intent: <one sentence>. Confidence: high | medium | low.
-  - ...
-
-Open questions (only if any intent confidence is medium or low):
-  - <question for the human, framed so a single sentence resolves it>
-  - ...
-
-Revised description (full markdown, ready to replace verbatim):
-
-<the entire new description>
-
-REVALIDATION_RESULT_END
-
-## Rules of conduct
-
-- Never invent code anchors. If you cannot verify something, surface it as an open
-  question rather than guessing.
-- **Source-quote requirement.** Every drift finding MUST carry a `Source quote:`
-  sub-line containing a verbatim substring of the description (the text that
-  introduced the anchor — file path, line reference, symbol name, etc.). If you
-  cannot quote the anchor from the description verbatim, DROP THE FINDING —
-  do not list it. This rule exists to suppress hallucinated drift findings.
-- **Only list DRIFTED anchors in the drift findings block.** Aligned anchors stay
-  silent — do NOT include them with an "Aligned" label or a "no drift on this
-  anchor" note. The drift findings block exists exclusively to enumerate items
-  the revised description will change.
-- Preserve the description's existing structure (Summary / Files / Plan / AC / etc.) —
-  revise the contents, not the skeleton.
-- Preserve every acceptance-criteria checkbox. If an AC item is now obsolete, mark
-  it ~struck-through~ with a one-line note rather than deleting it. The human
-  decides whether to remove obsolete AC.
-- Cite each drift finding with file_path:line_number (current state, not what the
-  description claimed).
-- If you find that the proposed work is already done, that IS drift — say so
-  explicitly in findings and have the revised description either reduce scope to the
-  remaining work or recommend closing the ticket.
-- Line-shifted-only drift (content found, just at a different line) is real drift —
-  fix the line numbers in the revised description.
 ```
 
 ### 2.75c — Parse + present
@@ -440,25 +272,11 @@ REVALIDATION_RESULT_END
 Parse the subagent output between `REVALIDATION_RESULT_START` / `REVALIDATION_RESULT_END`.
 
 - **ALIGNED** → print one line ("✓ Description is current — no revision needed.") and continue to Phase 3.
-- **DRIFTED** →
-  1. Print the drift findings + intent inference.
-  2. If any open questions exist, ask the user via `AskUserQuestion`. Cannot revise until they are answered. After answers come back, re-spawn the subagent with the answers folded into the prompt (under a new `## Human-resolved questions` section) so it can produce a final revised description.
-  3. Otherwise, gate via `AskUserQuestion`: *"Replace ticket description with revised version? (yes / preview / no)"*
-     - `preview` → print the full proposed new description, then re-ask
-     - `yes` → proceed to 2.75d
-     - `no` → continue to Phase 3 with the ORIGINAL description (the audit becomes informational only; the human implicitly accepts that the plan will be against the as-written description)
+- **DRIFTED** → read `${CLAUDE_SKILL_DIR}/revalidation-drifted.md` and follow it.
 
 ### 2.75d — Replace description + breadcrumb
 
-The description lives in the plans repo — replace it **there**, not in Jira (never `editJiraIssue(fields={description})`; Jira's description is only a stub). `Edit` the local plan file you read in Phase 1 (`$plan`, i.e. `<plans.repo>/<prefix>/<KEY>.md`): replace its **body** (everything below the front matter) with the revised description verbatim, preserving the `jira/project/board/type/epic/summary` front-matter block. You already read this file in Phase 1, so you have its current body to match against.
-
-Then post a one-line breadcrumb comment so future readers know the description was re-validated (not modified by a human):
-
-> *Pre-implementation re-validation (`/giga-workflow:jira`, <today's date>) — description revised against current code state. Original preserved in the plans-repo git history.*
-
-Use `<jira.mcpPrefix>addOrEditJiraIssueComment(cloudId, issueIdOrKey, commentBody=<markdown>)` with a markdown body containing just that one paragraph.
-
-Refresh the saved ticket details from Phase 1 (Step 5) with the revised description so Phase 3 plans against the up-to-date version.
+**When the user approved replacing the description (2.75c `yes`):** read `${CLAUDE_SKILL_DIR}/revalidation-replace.md` and follow it.
 
 ### 2.75e — Autonomous-run behavior
 
@@ -475,19 +293,7 @@ A story that changes what a user sees gets its structure — placement in the ap
 
 **Skip** when the story has no user-facing surface: backend-only, docs-only, a pure rename or refactor with no UI change, emit-only telemetry. Say which and move on.
 
-**Size it like the change:**
-
-| Story | Run |
-| --- | --- |
-| One component, no new route or nav entry | Inline, in your own context: `giga-ux:ux-design` Frame steps 1, 5, 6 and 7 — no agent |
-| A page, a flow, a new route or nav entry, or a dashboard / hub change | **One** `giga-ux:ux-architect` agent (`model: sonnet`) |
-
-Hand `giga-ux:ux-architect` the plan-file path, the Phase 2.5 comp summary, any spec or `designReferences` the board config names, and the app's voice guide path (`ux.brandVoice.guides` in `.claude/giga/config.json`, or "none yet"); it reads the code itself. It returns the **UX brief** and **Decisions for the owner**, at most three per story.
-
-- The brief is a planning requirement in Phase 3, beside the acceptance criteria — its entry points, states, vocabulary and words are slices of this story, not follow-ups.
-- The brief's **Ideas** go to the Idea Board (`ideas.board`) only when they meet the idea policy (`ideas.policy`) § Entry threshold and nothing matches them (§ Check for a match first); a match is recorded as "covered by <key or id>", and the rest are plans-file notes. An idea that qualifies but cannot be written (no `ideas.board`, or no `ArtifactData` in this context) goes in the story's plan file under `## Ideas for the Idea Board`, where `/giga-workflow:epic-review` posts it; a note that fails the threshold never goes under that heading. Never into the plan.
-- **Interactive:** put the Decisions for the owner to the user at the plan gate (`ExitPlanMode`), in plain terms. A recommended cut is a decision like any other, and the story is built as written unless the user agrees to it.
-- **Autonomous** (`/giga-workflow:epic-next` under `/giga-workflow:epic-loop`): build the brief as framed, record each decision for the owner in the story's plans file under `## UX decisions for the owner` with the default taken, and list them in the final report so none is defaulted unseen (the loop relays them). Never copy them into the epic's plan file: the epic carries decisions, the wave plan and Shipped one-liners only, and must not grow per story. The default for a recommended cut is always to build the story as written. STOP only when a decision blocks an acceptance criterion — the same rule as 2.75e.
+**When the story has a user-facing surface, so Phase 2.8 is not skipped:** read `${CLAUDE_SKILL_DIR}/ux-frame.md` and follow it.
 
 ---
 
@@ -520,10 +326,7 @@ Hand `giga-ux:ux-architect` the plan-file path, the Phase 2.5 comp summary, any 
    story(ies), backend first (`/giga-workflow:epic-plan` Step 7.5 is the rule). The user decides at the plan gate; if
    they keep one story, 5a runs the backend slice first.
 
-3c. **Skills-repo files** (only when `skillsRepo.path` is set). A file the story changes in the skills
-   repo — a skill, agent or hook — is listed under its own `Skills repo (<repo name>)` heading, by its
-   path in that repo, and assigned to a slice like any other file. Phase 5 edits it in a story
-   worktree (5s).
+3c. **When `skillsRepo.path` is set and the story edits files there:** read `${CLAUDE_SKILL_DIR}/skills-repo-plan.md` and follow it.
 
 4. **Write the plan** to the plan file as directed by plan mode.
 
@@ -584,22 +387,7 @@ Implement according to the approved plan using a **team of parallel agents**. Di
 
 ### 5s: Skills-repo worktree — only when the plan edits the skills repo
 
-Skills-repo files are edited in a story worktree, never in `<skillsRepo.path>` or in the checkout that
-holds `<skillsRepo.branch>`: that branch is live, and every repo that loads the skills runs it. ⚡ Create
-it once, before 5a, in one `Bash` call — it takes this repo's branch name, and a rerun reuses it:
-
-```bash
-wt=<skillsRepo.path>-<key-lower> b=$(git branch --show-current)
-[ -d "$wt" ] || git -C <skillsRepo.path> worktree add "$wt" -b "$b" <skillsRepo.branch> \
-  || git -C <skillsRepo.path> worktree add "$wt" "$b"
-git -C "$wt" status --short --branch
-```
-
-Each 5a agent that owns a skills-repo file gets the worktree path with its slice and edits there. Its 5r
-snapshot is kept apart, `git -C <worktree> diff -- <refactor files> > <scratchpad>/refactor-skills-<slice>.patch`;
-the orchestrator concatenates those into `<scratchpad>/refactor-skills.patch`, checks it with
-`git -C <worktree> apply --check --cached`, and lists those files under the skills repo's name in
-`## Refactor (in place)`, so the skills repo lands its own refactor commit ahead of the feature.
+**When the plan edits the skills repo:** read `${CLAUDE_SKILL_DIR}/skills-repo-worktree.md` and follow it.
 
 ### 5r: Refactor inside each slice — no separate pass
 
@@ -696,10 +484,7 @@ changed spends most of its turns on that discovery, and turns are the cost multi
 Spawn them in parallel — single message, multiple Agent tool calls.
 
 ⚠️ **Spawn them as `general-purpose`, not `feature-dev:code-reviewer`.** That agent type has no `Bash`
-tool — it cannot grep at scale, cannot run the test target below, and on a large diff it falls back to
-hand-reading every file. Measured on a 47-file story: 45 minutes, and it declined to assert the gate
-criterion because it could not run the gate. A reviewer that cannot execute anything is not cheaper,
-it is slower and weaker.
+tool — it cannot grep at scale or run the test target below. A reviewer that cannot execute anything is not cheaper, it is slower and weaker.
 
 1. **AC Review agent** (`general-purpose`, `model: sonnet`)
    - Load the ticket description and acceptance criteria
@@ -746,31 +531,7 @@ If 5b reported no failures, skip this step.
 
 ### 5d: Document deviations from the ticket
 
-After fixes are applied, compare the final implementation against the original ticket AC and specs. If **anything was intentionally built differently** — due to architectural constraints, a better approach discovered during development, a spec ambiguity resolved a certain way, or a scope reduction — post a comment on the Jira ticket documenting it.
-
-Use `<jira.mcpPrefix>addOrEditJiraIssueComment` with a markdown comment structured as:
-
-```
-## Implementation Notes
-
-### Deviations from Spec
-- **<AC item or spec section>** — Originally specified as X. Implemented as Y instead.
-  *Reason:* <brief architectural/technical rationale>
-
-### Decisions Made
-- <Any ambiguity in the ticket that was resolved during development, and how>
-```
-
-**When to post this comment:**
-- A guard, component, or route was structured differently than the ticket described
-- A specified behavior was simplified, deferred, or replaced with a stub
-- An AC item was partially implemented (note what's covered and what isn't)
-- An architectural pattern was chosen that differs from any example in the ticket
-
-**When to skip it:**
-- The implementation matches the ticket exactly with no notable deviations
-
-This comment becomes the authoritative record of why the code diverged from the spec, visible to future developers and the PM without needing to trace git history.
+**When anything was intentionally built differently from the ticket:** read `${CLAUDE_SKILL_DIR}/deviations.md` and follow it.
 
 ## Phase 6: Build, Type-check, Lint, Test (no PR)
 
@@ -819,30 +580,11 @@ Do **not** create a PR per ticket. Instead:
 
 Runs after the Phase 6 gate is green, on every story Phase 2.8 did not skip. It needs the compiled, running app, which is why it cannot fold into the 5b gate.
 
-- **Inline story** (one component): check the brief's states render and the label matches its siblings, in your own context — no agent.
-- **Otherwise:** **one** `giga-ux:ux-reviewer` agent (`model: sonnet`). Hand it the UX brief, the app and port from the `ux.devServerSkill` skill's table (or `devServers`), the routes touched, and the app's voice guide path (`ux.brandVoice` in `.claude/giga/config.json`, or "none yet"). When the dev server is already running, tell the reviewer so, and not to start another.
-
-**It blocks like 5b, and it may veto** (`giga-ux:ux-design` § Authority). Outcome `Owed` → render the named screens (seed the state, open the route, switch the theme or width) and re-dispatch `giga-ux:ux-reviewer` on them; this is not a revision round, and a screen still owed stops the story like a second failing review. Outcome `Revise` → **one** fix round with 5c's rules (never more agents than 5a spawned), on the reviewer's `story` findings only, then re-run Phase 6 and re-dispatch `giga-ux:ux-reviewer` on the failed steps only. The fix round never deletes, removes, rebuilds or refactors anything the story did not build. `existing` findings, rewordings of `existing` strings and `Remove` verdicts are recommendations: interactive, list them for the user; autonomous, record them in the story's plans file, and on the Idea Board only when they meet the § Entry threshold and nothing matches them (§ Check for a match first; a match is "covered by <key or id>" in the plans file), batched into one polish `fix` per section or page (`cut` for a `Remove`); an entry that qualifies but cannot be written goes under `## Ideas for the Idea Board` in the story's plan file. A second failing review, or Outcome `Stop for the owner`, stops the story: interactive, put the reviewer's decision to the user; autonomous, return `NEEDS_HUMAN` with it as a `decisions[]` entry. There is no third round.
-
-A severity-1 `story` finding is fixed in place, without a re-review, and never blocks Ship. Every `story` finding, severity 1 to 4, is fixed in this story: never an Idea Board entry, never a follow-up story. One whose fix needs a genuinely new feature beyond the story's goal and acceptance stops the story for the owner with a recommendation (autonomous: `NEEDS_HUMAN`), and writes no entry. Severity-0 and `existing` findings are never built in this story; each gets a decision under § Discrepancies not fixed here. **New scope** is never built and never a story here: write each unmatched entry that meets the Idea Board's § Entry threshold to the board (`ideas.board`; policy in `ideas.policy`), or under `## Ideas for the Idea Board` in the story's plan file when it cannot be written; the rest are plans-file notes. List each in the test plan.
+**When Phase 2.8 did not skip, so this phase runs:** read `${CLAUDE_SKILL_DIR}/ux-review.md` and follow it.
 
 ## Discrepancies not fixed here — decide each one, recommend a story only when it earns one
 
-A finished story is rarely reread, so a finding left only in its own plan file is lost. Some findings are not fixed in this story: an `existing` UX finding, a review-gate note, an owner's remark, or a gap found while building outside this story's work. A `story` finding is never one: it is fixed here (Phase 6.5). **New scope is not a discrepancy:** a capability the story did not promise, whoever noticed it, is an Idea Board entry and only the owner turns it into a story. **Every one gets a decision; not every one gets a story.** A follow-up is a recommendation you make on the merits, never a quota the template fills. Decide each finding:
-
-- **An existing open sibling whose scope it is.** Name the key; `/giga-workflow:epic-story-complete` Step 2 edits that sibling's plan file.
-- **A recommended new story** — only when the finding is worth someone's time later: a user-facing defect, a real gap in a flow, a risk to a release, or something the owner asked for. Group related findings by area, about one story per area, as one story per area.
-- **No follow-up**, with a one-line reason: cosmetic polish on a developer-only or internal surface, a test-fixture quirk with no product effect, behaviour that is already correct on inspection, or anything whose cost to track exceeds its value. The decision is recorded so it is a choice, not an omission.
-
-The moment a batch of findings is in hand, present them in this block, apart from the rest of the report, so they cannot be skimmed past:
-
-```
-Discrepancies not fixed in <KEY>
-| # | Finding | Found by | Decision |
-| 1 | <finding> | UX review sev 1 · owner · 5b · build | <new story: summary> · <ABC-123> · No follow-up — <reason> |
-```
-
-Print the same block in the Phase 7 test plan. `/giga-workflow:epic-story-complete` Step 2 takes every **story** row as an evolution item, and its gate mints the new ones; a "No follow-up" row is not minted. The story's plan file may record the evidence, but each item there names its decision. A row with no decision is not done.
+**When any finding is left unfixed in this story:** read `${CLAUDE_SKILL_DIR}/discrepancies.md` and follow it.
 
 ## Phase 7: Generate Test Plan
 
