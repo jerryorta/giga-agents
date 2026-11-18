@@ -21,9 +21,7 @@ On a board in the default `pr` mode, a first epic runs like this:
   └ /giga-workflow:jira ABC-124             starts on its own, then asks you to approve its plan
 /giga-workflow:epic-story-ship              you type it, after you review the diff
   ├ /giga-workflow:epic-evolution-audit     runs on its own
-  ├ /giga-workflow:epic-story-complete      runs on its own
-  ├ /giga-workflow:epic-merge-pr --yes      runs on its own
-  └ /giga-workflow:post-merge-cleanup       runs on its own
+  └ /giga-workflow:epic-story-complete      runs on its own, with --merge: one script call
 ```
 
 | Command | When | Started by | What it asks you |
@@ -35,12 +33,10 @@ On a board in the default `pr` mode, a first epic runs like this:
 
 After the plan gate, `/giga-workflow:jira` builds the story. It runs a review gate on the diff, then the build, typecheck, lint and test gate. When the story changes what a user sees, a UX review in the running app follows; the app is started through the skill `ux.devServerSkill` names, such as [`/giga-workflow:dev-server`](../plugins/giga-workflow/skills/dev-server/SKILL.md). It prints a test plan, with a decision for each discrepancy it did not fix. It never commits. A UX review that fails twice, or that stops for the owner, puts its decision to you.
 
-`/giga-workflow:epic-story-ship` then runs four skills in order, behind its one gate:
+`/giga-workflow:epic-story-ship` then runs two skills in order, behind its one gate:
 
 1. [`/giga-workflow:epic-evolution-audit`](../plugins/giga-workflow/skills/epic-evolution-audit/SKILL.md) checks the epic's other open stories against what shipped. Its edits wait for the gate.
-2. [`/giga-workflow:epic-story-complete`](../plugins/giga-workflow/skills/epic-story-complete/SKILL.md) commits, pushes, opens the PR and moves the ticket to In Review.
-3. [`/giga-workflow:epic-merge-pr --yes`](../plugins/giga-workflow/skills/epic-merge-pr/SKILL.md) merges the PR by `git.mergeMethod`, checks it merged, and syncs your local main branch.
-4. [`/giga-workflow:post-merge-cleanup`](../plugins/giga-workflow/skills/post-merge-cleanup/SKILL.md) deletes the branch, moves the ticket to Done, and moves the story from the wave plan to `## Shipped`.
+2. [`/giga-workflow:epic-story-complete --merge`](../plugins/giga-workflow/skills/epic-story-complete/SKILL.md) runs one script, `scripts/ship.py`. It commits, pushes, opens the PR and moves the ticket to In Review, then merges the PR by `git.mergeMethod`, checks it merged, syncs your local main branch, deletes the branch, moves the ticket to Done, writes the story's outcome to its plan file, and moves the story from the wave plan to `## Shipped`. Jira goes through the plans script's `transition` and `comment`, not an MCP.
 
 When secrets repos are configured (`secretsRepo` in the board, `secrets.sharedRepo` in the repo config), the ship step then commits and pushes the pending paths you approved at the gate. The gate lists paths only, never their contents. The report ends with the next story and its effort.
 

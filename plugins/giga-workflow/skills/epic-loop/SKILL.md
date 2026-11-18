@@ -274,16 +274,15 @@ Keep the prompt this small — the contract file carries the weight, and it neve
 > story agent for board `<board>`, story `<KEY>` — `<summary>`.
 >
 > Execute the chain: `/giga-workflow:epic-next <board> <KEY>` → implement via `/giga-workflow:jira` (Phase 6 gate green, Phase 6.5 UX review passed)
-> → *(when `loop.evolutionAudit`)* `/giga-workflow:epic-evolution-audit` → `/giga-workflow:epic-story-complete --yes`
-> → `/giga-workflow:epic-merge-pr --yes`.
+> → *(when `loop.evolutionAudit`)* `/giga-workflow:epic-evolution-audit` → `/giga-workflow:epic-story-complete --yes --merge`.
 >
 > End your turn with the §8 fenced JSON report and nothing after it.
 
 Never restate the board's `loop.unattendedAllowances` in the prompt: contract §5.1 has the agent read
 them from the board config.
 
-On a board with `config.mergeMode === "direct"`, drop `→ /giga-workflow:epic-merge-pr --yes`: the chain ends at
-`/giga-workflow:epic-story-complete --yes`, which fast-forwards `<git.mainBranch>` to the story and pushes it.
+On a board with `config.mergeMode === "direct"` the chain is the same: `--merge` has no effect there, and
+`/giga-workflow:epic-story-complete --yes` fast-forwards `<git.mainBranch>` to the story and pushes it.
 
 On `--resume`, append: *"A previous attempt escalated this decision: `<question>`. The answer is:
 `<answer>`. Adopt it and proceed — do not re-open it."*
@@ -318,7 +317,7 @@ and the ticket's status with `python3 <plans.script> board --jql 'key = <KEY>'`.
 | Clean tree, on `<git.mainBranch>`, PR `MERGED` | genuinely `SHIPPED`, whatever the report said |
 | Direct board: clean tree, on `<git.mainBranch>`, the story's commit on `origin/<git.mainBranch>`, no PR | genuinely `SHIPPED`, whatever the report said |
 | Skill-only story, any board: clean tree, on `<git.mainBranch>`, no PR, the story's `<KEY>` commit on the skills repo's `origin/<skillsRepo.branch>`, ticket Done | genuinely `SHIPPED`, whatever the report said |
-| Non-empty tree on a `<git.branchPrefix>` branch | implemented but never shipped — recoverable; treat as `FAILED` with that note, and let the retry run `/giga-workflow:epic-story-complete --yes` on the existing diff rather than redoing the work |
+| Non-empty tree on a `<git.branchPrefix>` branch | implemented but never shipped — recoverable; treat as `FAILED` with that note, and let the retry run `/giga-workflow:epic-story-complete --yes --merge` on the existing diff rather than redoing the work |
 | PR `OPEN` and tree clean | `PR_OPEN_UNMERGED` — the merge is what failed, not the story |
 | Report says `AWAITING_ACTOR_TEST`, non-empty tree on its `<git.branchPrefix>` branch, no PR | genuinely `AWAITING_ACTOR_TEST` |
 | Report says `SHIPPED` but no PR exists (on a direct board: the story's commit is not on `origin/<git.mainBranch>`), and it is not a shipped skill-only story (row above) | `FAILED`; trust the filesystem over the prose |
@@ -488,7 +487,7 @@ say which one is wrong. Then spawn one unnamed `general-purpose` agent at `loop.
 > Read `${CLAUDE_SKILL_DIR}/autonomy-contract.md` in full and follow it verbatim. You are the
 > story agent for board `<board>`, story `<KEY>`. Its cross-actor test passed and the work is on
 > `<branch>`, uncommitted. Re-run the `/giga-workflow:jira` Phase 6 gate if the tree changed since the pause, then
-> run `/giga-workflow:epic-story-complete --yes` → `/giga-workflow:epic-merge-pr --yes` (on a direct board, `/giga-workflow:epic-story-complete --yes` alone). Report `crossActor.needed: true`,
+> run `/giga-workflow:epic-story-complete --yes --merge`. Report `crossActor.needed: true`,
 > `source: "triage"`. End with the §8 fenced JSON report and nothing after it.
 
 Run 2d and 2d.5 on its report. Skip the `needsActor` row of 2d.5, because the test was run. Record the
